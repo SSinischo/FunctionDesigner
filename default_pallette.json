@@ -1,0 +1,165 @@
+{
+    "type": 999,
+    "children": [
+        {
+            "type": 0,
+            "value": 0
+        },
+        {
+            "type": 10
+        },
+        {
+            "type": 11
+        },
+        {
+            "type": 12
+        },
+        {
+            "type": 13
+        },
+        {
+            "type": 50
+        },
+        {
+            "type": 51
+        },
+        {
+            "type": 700,
+            "name": "operators",
+            "children": [
+                {
+                    "type": 100
+                },
+                {
+                    "type": 101
+                },
+                {
+                    "type": 102
+                },
+                {
+                    "type": 103
+                },
+                {
+                    "type": 104
+                },
+                {
+                    "type": 105
+                }
+            ]
+        },
+        {
+            "type": 700,
+            "name": "trig",
+            "children": [
+                {
+                    "type": 200
+                },
+                {
+                    "type": 201
+                },
+                {
+                    "type": 202
+                }
+            ]
+        },
+        {
+            "type": 700,
+            "name": "trig extended",
+            "children": [
+                {
+                    "type": 203
+                },
+                {
+                    "type": 204
+                },
+                {
+                    "type": 205
+                },
+                {
+                    "type": 206
+                },
+                {
+                    "type": 207
+                },
+                {
+                    "type": 208
+                },
+                {
+                    "type": 209
+                },
+                {
+                    "type": 210
+                },
+                {
+                    "type": 211
+                }
+            ]
+        },
+        {
+            "type": 700,
+            "name": "logic",
+            "children": [
+                {
+                    "type": 106
+                },
+                {
+                    "type": 107
+                },
+                {
+                    "type": 108
+                },
+                {
+                    "type": 109
+                },
+                {
+                    "type": 110
+                },
+                {
+                    "type": 111
+                },
+                {
+                    "type": 112
+                }
+            ]
+        },
+        {
+            "type": 700,
+            "name": "misc. functions",
+            "children": [
+                {
+                    "type": 300
+                },
+                {
+                    "type": 301
+                },
+                {
+                    "type": 302
+                },
+                {
+                    "type": 303
+                },
+                {
+                    "type": 304
+                },
+                {
+                    "type": 305
+                },
+                {
+                    "type": 306
+                },
+                {
+                    "type": 350
+                },
+                {
+                    "type": 351
+                },
+                {
+                    "type": 352
+                },
+                {
+                    "type": 353
+                }
+            ]
+        }
+    ]
+}
