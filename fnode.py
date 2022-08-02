@@ -14,6 +14,7 @@ class FNode(QObject):
 	UNCALCULATED = 1
 	INVALID_CHILDREN = 2
 
+
 	class Type(IntEnum):
 		CONSTANT = 0
 		W = 10
@@ -65,6 +66,7 @@ class FNode(QObject):
 		SET = 700
 		FUNCTION = 800
 		ROOT = 999
+	
 
 	CALC_FUNCTIONS = {
 		Type.PI: lambda *_: np.pi,
@@ -112,6 +114,7 @@ class FNode(QObject):
 		Type.AVG: lambda *c: 116
 	}
 
+
 	STRING_FUNCTIONS = {
 		Type.PI: lambda *_: 'pi',
 		Type.E: lambda *_: 'e',
@@ -158,6 +161,7 @@ class FNode(QObject):
 		Type.AVG: lambda *c: 'avg(' + ','.join(c) + ')',
 	}
 
+
 	PRIORITY = {
 		Type.NEGATE: 8,
 		Type.EXPONENT: 7,
@@ -174,6 +178,7 @@ class FNode(QObject):
 		Type.OR: 2,
 		Type.AND: 1
 	}
+
 
 	TOKENS = {
 		'||': Type.OR,
@@ -222,6 +227,7 @@ class FNode(QObject):
 		'!=': Type.NOT_EQUAL
 	}
 
+
 	TYPE_NAMES = {
 		Type.CONSTANT: 'constant value',
 		Type.PI: 'pi',
@@ -269,11 +275,13 @@ class FNode(QObject):
 		Type.AVG: 'average'
 	}
 
+
 	ID_COUNTER = 0
 	ACTIVE_NODES = {}
 	PAUSE_CALCULATIONS = False
 
 	nodeUpdated = pyqtSignal(object)
+
 	def __init__(self, type:int):
 		super().__init__()
 		self._nodeID = FNode.ID_COUNTER
@@ -282,6 +290,7 @@ class FNode(QObject):
 		self._type = type
 		self._parent = None
 		self._children = []
+		self._baseNode = False
 		self._negated = False
 		self._name = None
 		self._value = 0
@@ -290,12 +299,14 @@ class FNode(QObject):
 		
 		print(f'{self} - created')
 
+
 	def __repr__(self) -> str:
 		return f'{self._name if self._name else self._value if self._type == FNode.Type.CONSTANT else ""} {self._type.name} #{self._nodeID} C{len(self._children)}'
 	
 
 	def __str__(self):
 		return f'{self._name+" " if self._name else (str(self._value)+" " if self._type == FNode.Type.CONSTANT else "")}{self._type.name} #{self._nodeID} ({len(self._children)})'
+
 
 	def nodeID(self):
 		return self._nodeID
@@ -337,12 +348,16 @@ class FNode(QObject):
 	def isFunction(self):
 		return 200 <= self._type < 400
 
+	def isBaseNode(self):
+		return self._baseNode
+	
 	def priority(self):
 		return FNode.PRIORITY.get(self._type)
 
 	def negate(self):
 		self._negated = not self._negated
 		self.calculate()
+
 
 	def setConstantValue(self, value):
 		assert self._type == FNode.Type.CONSTANT
@@ -351,8 +366,10 @@ class FNode(QObject):
 		self._formula = str(int(self._value) if not self._value % 1 else self._value)
 		self.calculate()
 
+
 	def childLimit(self):
 		return 0 if self._type < 40 else 1 if self._type < 100 else float('inf')
+
 
 	def hasValidChildren(self):
 		if(self.isUnary()):
@@ -360,6 +377,12 @@ class FNode(QObject):
 		if(self.isFunction()):
 			return len(self._children) == 1
 		return len(self._children) > 0
+	
+
+	def invalidate(self, invalidateParent=True):
+		self.state = FNode.INVALID_CHILDREN
+		if(invalidateParent and self._parent):
+			self._parent.invalidate()
 
 
 	def calculate(self, calcParent=True):
@@ -373,20 +396,14 @@ class FNode(QObject):
 				print(f'{self} - uncalculated children!')
 				c.calculate(False)
 			if(c.state == FNode.INVALID_CHILDREN):
-				self.state = FNode.INVALID_CHILDREN
-				if(calcParent and self._parent):
-					self._parent.calculate()
-				return
+				return self.invalidate(calcParent)
 		
 		if(self._type == FNode.Type.ROOT or self._type == FNode.Type.SET):
 			return
 
 		if(not self.hasValidChildren()):
 			print(f'{self} - invalid child count!')
-			self.state = FNode.INVALID_CHILDREN
-			if(calcParent and self._parent):
-				self._parent.calculate()
-			return
+			return self.invalidate(calcParent)
 
 		if(self._type != FNode.Type.CONSTANT):
 			calcFn = FNode.CALC_FUNCTIONS[self._type]
@@ -404,12 +421,14 @@ class FNode(QObject):
 				self._formula = strFn(*cStrsParens)
 			else:
 				self._formula = strFn(*[c._formula for c in self._children])
+
 		if(self._negated):
 			self._value *= -1
 			if(len(self._children) > 1):
 				self._formula = f'-({self._formula})'
 			else:
 				self._formula = f'-{self._formula}'
+
 		self.state = FNode.CALCULATED
 		self.nodeUpdated.emit(self)
 		if(calcParent and self._parent):
@@ -433,6 +452,7 @@ class FNode(QObject):
 	
 
 	def deleteChild(self, child):
+		print(f'{self} - deleting {child}')
 		def recurse(n):
 			FNode.ACTIVE_NODES.pop(n._nodeID)
 			[recurse(c) for c in n._children]
@@ -450,6 +470,8 @@ class FNode(QObject):
 		j = {'type': int(self._type)}
 		if(self._name):
 			j['name'] = self._name
+		if(self._baseNode):
+			j['baseNode'] = True
 		if(self._type == FNode.Type.CONSTANT):
 			j['value'] = int(self._value) if not self._value % 1 else self._value
 		if(self._children):
@@ -465,7 +487,9 @@ class FNode(QObject):
 	
 
 	def copy(self):
-		return FNode.fromJSON(self.asJSON())
+		n = FNode.fromJSON(self.asJSON())
+		n._baseNode = False
+		return n
 	
 
 	@classmethod
@@ -547,8 +571,9 @@ class FNode(QObject):
 	def fromJSON(_, j):
 		n = FNode(FNode.Type(j['type']))
 		n._name = j.get('name')
+		n._baseNode = j.get('baseNode') or False
 		if(n._type == FNode.Type.CONSTANT):
-			n.setConstantValue(j['value'])
+			n.setConstantValue(j.get('value') or 0)
 		for c in j.get('children') or []:
 			n.addChild(FNode.fromJSON(c))
 		return n

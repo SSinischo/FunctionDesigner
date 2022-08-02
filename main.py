@@ -16,19 +16,7 @@ class Pallette(NodeView):
 			s = ''.join(f.readlines())
 			f.close()
 		self.rootNode = FNode.fromString(s)
-		self.defaultIDSpace = FNode.ID_COUNTER
 		self.createItems(self.rootNode)
-
-
-	def createItems(self, rootNode, pItem=None):
-		tItem = super().createItems(rootNode, pItem)
-		tItem.setFlags(tItem.flags() ^ Qt.ItemFlag.ItemIsDropEnabled)
-		if(rootNode.type() == FNode.Type.SET):
-			if(rootNode.nodeID() < self.defaultIDSpace):
-				tItem.setFlags(tItem.flags() ^ Qt.ItemFlag.ItemIsDragEnabled)
-			else:
-				tItem.setFlags(tItem.flags() | Qt.ItemFlag.ItemIsDropEnabled)
-		return tItem
 
 
 class CompositionView(NodeView):

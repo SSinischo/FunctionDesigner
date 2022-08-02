@@ -13,7 +13,7 @@ class NodeView(QTreeWidget):
 		self.setHeaderHidden(True)
 		self.setDragDropMode(self.DragDropMode.DragDrop)
 		self.setAcceptDrops(True)
-		self.itemSelectionChanged.connect(lambda *_: self.selectedNodeRefresh.emit(self.getSelectedNode()))
+		self.itemSelectionChanged.connect(lambda *_: self.selectedNodeRefresh.emit(self.selectedNode()))
 
 		self.rootNode = FNode(FNode.Type.ROOT)
 		self.attachNodeID(self.invisibleRootItem(), self.rootNode)
@@ -34,7 +34,7 @@ class NodeView(QTreeWidget):
 		return FNode.getNode(tItem.data(0, Qt.ItemDataRole.UserRole)) if tItem else None
 	
 
-	def getSelectedNode(self):
+	def selectedNode(self):
 		return self.getAttachedNode(self.selectedItem())
 
 
@@ -48,6 +48,11 @@ class NodeView(QTreeWidget):
 			tItem.setFlags(tItem.flags() | Qt.ItemFlag.ItemIsEditable)
 		else:
 			tItem.setText(0, FNode.TYPE_NAMES[n.type()])
+
+		if(n.isBaseNode()):
+			tItem.setFlags(tItem.flags() ^  Qt.ItemFlag.ItemIsDropEnabled)
+			if(n.type() == FNode.Type.SET):
+				tItem.setFlags(tItem.flags() ^ Qt.ItemFlag.ItemIsDragEnabled)
 		#n.nodeUpdated.connect(lambda n: self.selectedNodeRefresh.emit(n) if self.getAttachedNode(self.selectedItem()) == n else None)
 		return tItem
 	
@@ -62,7 +67,7 @@ class NodeView(QTreeWidget):
 			tItem = pItem
 		for c in rootNode.children():
 			self.createItems(c, tItem)
-		tItem.setExpanded(True)
+		#tItem.setExpanded(True)
 		return tItem
 	
 
@@ -82,6 +87,8 @@ class NodeView(QTreeWidget):
 
 	
 	def deleteSelectedItem(self):
+		if(self.selectedNode().isBaseNode()):
+			return False
 		tItem = self.selectedItem()
 		if(tItem):
 			self.deleteItemAndNodes(tItem)
@@ -90,7 +97,7 @@ class NodeView(QTreeWidget):
 	
 
 	def copySelectedItem(self):
-		n = self.getSelectedNode()
+		n = self.selectedNode()
 		if(not n):
 			return False
 		QApplication.clipboard().setText(n.asString())
@@ -156,7 +163,7 @@ class NodeView(QTreeWidget):
 			e.setDropAction(Qt.DropAction.MoveAction)
 	
 		droppedNode = self.getAttachedNode(e.source().lastDragged)
-		pnOld = droppedNode.parent()
+		#pnOld = droppedNode.parent()
 		epos = e.position().toPoint()
 		tItemDroppedAt = self.itemAt(epos)
 		idxDroppedAt = self.indexAt(epos)
@@ -170,26 +177,31 @@ class NodeView(QTreeWidget):
 				cidx = idxDroppedAt.row() + 1
 			case self.DropIndicatorPosition.OnItem:
 				pItemNew = tItemDroppedAt
-				if(pnOld.parent() == self.getAttachedNode(pItemNew).parent()):
+				#if(pnOld.parent() == self.getAttachedNode(pItemNew).parent()):
+				if(droppedNode.parent() == self.getAttachedNode(pItemNew)):
 					cidx = tItemDroppedAt.childCount() - 1
 				else:
 					cidx = tItemDroppedAt.childCount()
 			case self.DropIndicatorPosition.OnViewport:
 				pItemNew = self.invisibleRootItem()
 				cidx = self.invisibleRootItem().childCount()
-		pnNew = self.getAttachedNode(pItemNew)
 
+		super().dropEvent(e)
+		tItem = pItemNew.child(cidx)
+
+		pnNew = self.getAttachedNode(pItemNew)
 		if(e.dropAction() == Qt.DropAction.CopyAction):
 			droppedNode = droppedNode.copy()
 			pnNew.addChild(droppedNode, cidx)
+			if(droppedNode.children()):
+				[self.createItems(c, tItem) for c in droppedNode.children()]
 		else:
-			pnOld.removeChild(droppedNode)
+			#pnOld.removeChild(droppedNode)
 			pnNew.addChild(droppedNode, cidx)
 
-		super().dropEvent(e)
-		e.source().lastDragged = None
+		self.attachNodeID(tItem, droppedNode)
 		pItemNew.setExpanded(True)
-		self.attachNodeID(pItemNew.child(cidx), droppedNode)
+		e.source().lastDragged = None
 
 
 	def dragEnterEvent(self, e):
