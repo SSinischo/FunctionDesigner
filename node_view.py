@@ -48,11 +48,6 @@ class NodeView(QTreeWidget):
 			tItem.setFlags(tItem.flags() | Qt.ItemFlag.ItemIsEditable)
 		else:
 			tItem.setText(0, FNode.TYPE_NAMES[n.type()])
-
-		if(n.isBaseNode()):
-			tItem.setFlags(tItem.flags() ^  Qt.ItemFlag.ItemIsDropEnabled)
-			if(n.type() == FNode.Type.SET):
-				tItem.setFlags(tItem.flags() ^ Qt.ItemFlag.ItemIsDragEnabled)
 		#n.nodeUpdated.connect(lambda n: self.selectedNodeRefresh.emit(n) if self.getAttachedNode(self.selectedItem()) == n else None)
 		return tItem
 	
@@ -87,8 +82,6 @@ class NodeView(QTreeWidget):
 
 	
 	def deleteSelectedItem(self):
-		if(self.selectedNode().isBaseNode()):
-			return False
 		tItem = self.selectedItem()
 		if(tItem):
 			self.deleteItemAndNodes(tItem)

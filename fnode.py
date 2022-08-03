@@ -290,7 +290,6 @@ class FNode(QObject):
 		self._type = type
 		self._parent = None
 		self._children = []
-		self._baseNode = False
 		self._negated = False
 		self._name = None
 		self._value = 0
@@ -347,9 +346,6 @@ class FNode(QObject):
 
 	def isFunction(self):
 		return 200 <= self._type < 400
-
-	def isBaseNode(self):
-		return self._baseNode
 	
 	def priority(self):
 		return FNode.PRIORITY.get(self._type)
@@ -470,8 +466,6 @@ class FNode(QObject):
 		j = {'type': int(self._type)}
 		if(self._name):
 			j['name'] = self._name
-		if(self._baseNode):
-			j['baseNode'] = True
 		if(self._type == FNode.Type.CONSTANT):
 			j['value'] = int(self._value) if not self._value % 1 else self._value
 		if(self._children):
@@ -488,7 +482,6 @@ class FNode(QObject):
 
 	def copy(self):
 		n = FNode.fromJSON(self.asJSON())
-		n._baseNode = False
 		return n
 	
 
@@ -571,7 +564,6 @@ class FNode(QObject):
 	def fromJSON(_, j):
 		n = FNode(FNode.Type(j['type']))
 		n._name = j.get('name')
-		n._baseNode = j.get('baseNode') or False
 		if(n._type == FNode.Type.CONSTANT):
 			n.setConstantValue(j.get('value') or 0)
 		for c in j.get('children') or []:

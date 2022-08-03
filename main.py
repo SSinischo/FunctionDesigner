@@ -8,21 +8,50 @@ from node_view import NodeView
 
 from options import CURVE_FRAMES, CURVE_RESOLUTION
 
-class Pallette(NodeView):
+class NodePalette(NodeView):
 	def __init__(self):
 		super().__init__()
 
-		with open('default_pallette.json') as f:
+		with open('default_palette.json') as f:
 			s = ''.join(f.readlines())
 			f.close()
 		self.rootNode = FNode.fromString(s)
+		self.defaultNodeIDs = set()
+		self.isAddingDefaults = True
 		self.createItems(self.rootNode)
+		self.isAddingDefaults = False
+
+
+	def dragMoveEvent(self, e):
+		if(e.source() == self and self.isDefaultItem(self.selectedItem())):
+			self.invisibleRootItem().setFlags(self.invisibleRootItem().flags() &  ~Qt.ItemFlag.ItemIsDropEnabled)
+		else:
+			self.invisibleRootItem().setFlags(self.invisibleRootItem().flags() | Qt.ItemFlag.ItemIsDropEnabled)
+		return super().dragMoveEvent(e)
+
 
 	def dragEnterEvent(self, e):
-		if(e.source() == self and self.getAttachedNode(self.lastDragged).isBaseNode()):
-			e.ignore()
-			return
 		return super().dragEnterEvent(e)
+	
+
+	def createItem(self, n):
+		tItem = super().createItem(n)
+		if(self.isAddingDefaults):
+			tItem.setFlags(tItem.flags() &  ~Qt.ItemFlag.ItemIsDropEnabled)
+			if(n.type() == FNode.Type.SET):
+				tItem.setFlags(tItem.flags() &  ~Qt.ItemFlag.ItemIsDragEnabled)
+			self.defaultNodeIDs.add(tItem.data(0, Qt.ItemDataRole.UserRole))
+		return tItem
+
+
+	def deleteSelectedItem(self):
+		if(self.isDefaultItem(self.selectedItem())):
+			return False
+		return super().deleteSelectedItem()
+
+
+	def isDefaultItem(self, tItem):
+		return tItem and tItem.data(0, Qt.ItemDataRole.UserRole) in self.defaultNodeIDs
 
 
 class CompositionView(NodeView):
@@ -179,7 +208,7 @@ class Application(QApplication):
 		super(Application, self).__init__(*args, **kwargs)
 
 		self.previewPanel = PreviewPanel()
-		self.pallette = Pallette()
+		self.nodePalette = NodePalette()
 		self.compositionView = CompositionView()
 		self.compositionView.selectedNodeRefresh.connect(self.previewPanel.formula.onSelectedNodeRefresh)
 		self.compositionView.selectedNodeRefresh.connect(self.previewPanel.plot.onSelectedNodeRefresh)
@@ -221,7 +250,7 @@ class Application(QApplication):
 		v.addLayout(sliderContainer)
 
 		h = QHBoxLayout()
-		h.addWidget(self.pallette)
+		h.addWidget(self.nodePalette)
 		h.addWidget(self.compositionView, 1)
 
 		v.addLayout(h)
