@@ -7,6 +7,7 @@ from fnode import FNode
 from node_view import NodeView
 
 from options import CURVE_FRAMES, CURVE_RESOLUTION
+from stylesheets import *
 
 class NodePalette(NodeView):
 	def __init__(self):
@@ -57,6 +58,7 @@ class NodePalette(NodeView):
 class CompositionView(NodeView):
 	def __init__(self):
 		super().__init__()
+		self.setStyleSheet(COMPOSITION_VIEW_STYLE)
 
 
 class PreviewPlot(QWidget):
