@@ -18,6 +18,12 @@ class Pallette(NodeView):
 		self.rootNode = FNode.fromString(s)
 		self.createItems(self.rootNode)
 
+	def dragEnterEvent(self, e):
+		if(e.source() == self and self.getAttachedNode(self.lastDragged).isBaseNode()):
+			e.ignore()
+			return
+		return super().dragEnterEvent(e)
+
 
 class CompositionView(NodeView):
 	def __init__(self):

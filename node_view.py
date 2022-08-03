@@ -67,7 +67,7 @@ class NodeView(QTreeWidget):
 			tItem = pItem
 		for c in rootNode.children():
 			self.createItems(c, tItem)
-		#tItem.setExpanded(True)
+		tItem.setExpanded(True)
 		return tItem
 	
 
@@ -156,51 +156,53 @@ class NodeView(QTreeWidget):
 		if(not isinstance(e.source(), NodeView)):
 			e.ignore()
 			return
-
-		if(e.source() != self):
-			e.setDropAction(Qt.DropAction.CopyAction)
-		else:
-			e.setDropAction(Qt.DropAction.MoveAction)
 	
-		droppedNode = self.getAttachedNode(e.source().lastDragged)
-		#pnOld = droppedNode.parent()
-		epos = e.position().toPoint()
-		tItemDroppedAt = self.itemAt(epos)
-		idxDroppedAt = self.indexAt(epos)
+		sourceItemDragged = e.source().selectedItem()
+		ePos = e.position().toPoint()
+		tItemDroppedAt = self.itemAt(ePos)
+		qmidxDroppedAt = self.indexAt(ePos)
 
 		match(self.dropIndicatorPosition()):
 			case self.DropIndicatorPosition.AboveItem:
-				pItemNew = tItemDroppedAt.parent() or self.invisibleRootItem()
-				cidx = idxDroppedAt.row()
+				pItemDroppedAt = tItemDroppedAt.parent() or self.invisibleRootItem()
+				idxDroppedAt = qmidxDroppedAt.row()
 			case self.DropIndicatorPosition.BelowItem:
-				pItemNew = tItemDroppedAt.parent() or self.invisibleRootItem()
-				cidx = idxDroppedAt.row() + 1
+				pItemDroppedAt = tItemDroppedAt.parent() or self.invisibleRootItem()
+				idxDroppedAt = qmidxDroppedAt.row() + 1
 			case self.DropIndicatorPosition.OnItem:
-				pItemNew = tItemDroppedAt
-				#if(pnOld.parent() == self.getAttachedNode(pItemNew).parent()):
-				if(droppedNode.parent() == self.getAttachedNode(pItemNew)):
-					cidx = tItemDroppedAt.childCount() - 1
-				else:
-					cidx = tItemDroppedAt.childCount()
+				if(sourceItemDragged == tItemDroppedAt):
+					return
+				pItemDroppedAt = tItemDroppedAt
+				idxDroppedAt = tItemDroppedAt.childCount()
 			case self.DropIndicatorPosition.OnViewport:
-				pItemNew = self.invisibleRootItem()
-				cidx = self.invisibleRootItem().childCount()
+				pItemDroppedAt = self.invisibleRootItem()
+				idxDroppedAt = self.invisibleRootItem().childCount()
+	
+		if(sourceItemDragged.parent() == pItemDroppedAt or e.source() == self and not sourceItemDragged.parent()):
+			if(idxDroppedAt - 1 >= 0):
+				idxDroppedAt -= 1
+
+		if(e.source() != self):
+			e.setDropAction(Qt.DropAction.CopyAction)
+			droppedNode = self.getAttachedNode(sourceItemDragged).copy()
+		else:
+			e.setDropAction(Qt.DropAction.MoveAction)
+			droppedNode = self.getAttachedNode(sourceItemDragged)
 
 		super().dropEvent(e)
-		tItem = pItemNew.child(cidx)
 
-		pnNew = self.getAttachedNode(pItemNew)
+		tItemDropped = pItemDroppedAt.child(idxDroppedAt)
+		pNodeDroppedAt = self.getAttachedNode(pItemDroppedAt)
+
 		if(e.dropAction() == Qt.DropAction.CopyAction):
-			droppedNode = droppedNode.copy()
-			pnNew.addChild(droppedNode, cidx)
+			pNodeDroppedAt.addChild(droppedNode, idxDroppedAt)
 			if(droppedNode.children()):
-				[self.createItems(c, tItem) for c in droppedNode.children()]
+				[self.createItems(c, tItemDropped) for c in droppedNode.children()]
 		else:
-			#pnOld.removeChild(droppedNode)
-			pnNew.addChild(droppedNode, cidx)
+			pNodeDroppedAt.addChild(droppedNode, idxDroppedAt)
 
-		self.attachNodeID(tItem, droppedNode)
-		pItemNew.setExpanded(True)
+		self.attachNodeID(tItemDropped, droppedNode)
+		pItemDroppedAt.setExpanded(True)
 		e.source().lastDragged = None
 
 

@@ -78,13 +78,7 @@
                 {
                     "type": 202,
                     "baseNode": true
-                }
-            ]
-        },
-        {
-            "type": 700,
-            "name": "trig extended",
-            "children": [
+                },
                 {
                     "type": 203,
                     "baseNode": true
