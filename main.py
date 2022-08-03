@@ -264,6 +264,8 @@ class Application(QApplication):
 		self.mainWin.setWindowTitle('Function Designer')
 		self.mainWin.show()
 
+		self.previewPanel.formula.setText('1+2*3*4+5+6')
+
 		self.exec()
 	
 	def onFrameIdxChanged(self):

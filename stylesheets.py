@@ -3,7 +3,7 @@ COMPOSITION_VIEW_STYLE = '''
         border-image: url(img/vline.svg) 0;
     }
 
-    QTreeView::branch:has-siblings:adjoins-item {
+    QTreeView::branch:!has-children:has-siblings:adjoins-item {
         border-image: url(img/branch-more.svg) 0;
     }
 

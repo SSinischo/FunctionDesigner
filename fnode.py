@@ -431,17 +431,16 @@ class FNode(QObject):
 			self._parent.calculate()
 
 
-	def addChild(self, child, idx=-1):
+	def addChild(self, child, idx=None):
 		print(f'{self} - adding {child}')
+		if(idx == None):
+			idx = len(self._children)
 		if(child._parent):
 			child._parent.removeChild(child)
 		if(child._type == self._type):
 			for c in child._children:
 				c._parent = self
-			if(idx > 0):
-				self._children = self._children[:idx] + child._children + self._children[idx:]
-			else:
-				self._children = child._children + self._children
+			self._children = self._children[:idx] + child._children + self._children[idx:]
 		else:
 			child._parent = self
 			self._children.insert(idx, child)
@@ -494,7 +493,7 @@ class FNode(QObject):
 	
 
 	@classmethod
-	def tokenToNode(_, t, prevToken=None):
+	def tokenToNode(_, t:str, prevToken:str=None) -> "FNode":
 		nType = FNode.TOKENS.get(t)
 		if(not nType):
 			try:
@@ -506,7 +505,7 @@ class FNode(QObject):
 			n.setConstantValue(f)
 			return n
 		if(nType == FNodeType.SUBTRACT):
-			if(not prevToken or FNode.PRIORITY.get(prevToken) or prevToken == '('):
+			if(not prevToken or FNode.PRIORITY.get(FNode.TOKENS.get(prevToken)) or prevToken == '('):
 				nType = FNodeType.NEGATE
 		return FNode(nType)
 
@@ -529,8 +528,8 @@ class FNode(QObject):
 				rChild.negate()
 				return outputQ.append(rChild)
 			lChild = outputQ.pop()
-			n.addChild(rChild)
 			n.addChild(lChild)
+			n.addChild(rChild)
 			outputQ.append(n)
 
 

@@ -151,6 +151,7 @@ class NodeView(QTreeWidget):
 			return
 	
 		sourceItemDragged = e.source().selectedItem()
+		sourcePItemDragged = sourceItemDragged.parent() or self.invisibleRootItem()
 		ePos = e.position().toPoint()
 		tItemDroppedAt = self.itemAt(ePos)
 		qmidxDroppedAt = self.indexAt(ePos)
@@ -171,8 +172,9 @@ class NodeView(QTreeWidget):
 				pItemDroppedAt = self.invisibleRootItem()
 				idxDroppedAt = self.invisibleRootItem().childCount()
 	
-		if(sourceItemDragged.parent() == pItemDroppedAt or e.source() == self and not sourceItemDragged.parent()):
-			if(idxDroppedAt - 1 >= 0):
+		if(sourcePItemDragged == pItemDroppedAt):
+			oldIdx = sourcePItemDragged.indexOfChild(sourceItemDragged)
+			if(idxDroppedAt > oldIdx):
 				idxDroppedAt -= 1
 
 		if(e.source() != self):
@@ -187,12 +189,11 @@ class NodeView(QTreeWidget):
 		tItemDropped = pItemDroppedAt.child(idxDroppedAt)
 		pNodeDroppedAt = self.getAttachedNode(pItemDroppedAt)
 
-		if(e.dropAction() == Qt.DropAction.CopyAction):
-			pNodeDroppedAt.addChild(droppedNode, idxDroppedAt)
-			if(droppedNode.children()):
-				[self.createItems(c, tItemDropped) for c in droppedNode.children()]
-		else:
-			pNodeDroppedAt.addChild(droppedNode, idxDroppedAt)
+		pNodeDroppedAt.addChild(droppedNode, idxDroppedAt)
+		if(e.dropAction() == Qt.DropAction.CopyAction and droppedNode.children()):
+			[self.createItems(c, tItemDropped) for c in droppedNode.children()]
+		# else:
+		# 	pNodeDroppedAt.addChild(droppedNode, idxDroppedAt)
 
 		self.attachNodeID(tItemDropped, droppedNode)
 		pItemDroppedAt.setExpanded(True)
