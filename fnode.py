@@ -438,7 +438,10 @@ class FNode(QObject):
 		if(child._type == self._type):
 			for c in child._children:
 				c._parent = self
-			self._children = self._children[:idx] + child._children + self._children[idx:]
+			if(idx > 0):
+				self._children = self._children[:idx] + child._children + self._children[idx:]
+			else:
+				self._children = child._children + self._children
 		else:
 			child._parent = self
 			self._children.insert(idx, child)
@@ -526,8 +529,8 @@ class FNode(QObject):
 				rChild.negate()
 				return outputQ.append(rChild)
 			lChild = outputQ.pop()
-			n.addChild(lChild)
 			n.addChild(rChild)
+			n.addChild(lChild)
 			outputQ.append(n)
 
 
