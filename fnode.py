@@ -435,8 +435,13 @@ class FNode(QObject):
 		print(f'{self} - adding {child}')
 		if(child._parent):
 			child._parent.removeChild(child)
-		child._parent = self
-		self._children.insert(idx, child)
+		if(child._type == self._type):
+			for c in child._children:
+				c._parent = self
+			self._children = self._children[:idx] + child._children + self._children[idx:]
+		else:
+			child._parent = self
+			self._children.insert(idx, child)
 		self.calculate()
 
 
@@ -486,78 +491,73 @@ class FNode(QObject):
 	
 
 	@classmethod
+	def tokenToNode(_, t, prevToken=None):
+		nType = FNode.TOKENS.get(t)
+		if(not nType):
+			try:
+				f = float(t)
+			except:
+				print('Invalid token!')
+				return
+			n = FNode(FNode.Type.CONSTANT)
+			n.setConstantValue(f)
+			return n
+		if(nType == FNode.Type.SUBTRACT):
+			if(not prevToken or FNode.PRIORITY.get(prevToken) or prevToken == '('):
+				nType = FNode.Type.NEGATE
+		return FNode(nType)
+	
+
+	@classmethod
 	def fromFormula(_, s):
 		rexp = r'([a-z]+|[0-9.]+|==|>=|<=|&&|!=|\|\||[\(\)\^\/*\-+])'
 		tokens = re.findall(rexp, s.lower())
-		nodes = []
-		try:
-			for t in tokens:
-				n = FNode(FNode.TOKENS.get(t) or FNode.Type.CONSTANT)
-				if(n._type == FNode.Type.CONSTANT):
-					n.setConstantValue(float(t))
-				elif(n._type == FNode.Type.SUBTRACT):
-					if(not nodes or nodes[-1].isOperator() or nodes[-1]._type == FNode.Type.OPEN_PAREN):
-						n._type = FNode.Type.NEGATE
-				nodes.append(n)
-		except Exception as e:
-			print('Invalid token in formula!')
-			return
-
-		outQ = []
+		outputQ = []
 		opStack = []
-		for n in nodes:
+
+		def addToOutput(n):
 			if(n.isUnary()):
-				outQ.append(n)
-			elif(n.isFunction() or n._type == FNode.Type.OPEN_PAREN):
+				return outputQ.append(n)
+			rChild = outputQ.pop()
+			if(n.isFunction()):
+				n.addChild(rChild)
+				return outputQ.append(n)
+			if(n._type == FNode.Type.NEGATE):
+				rChild.negate()
+				return outputQ.append(rChild)
+			lChild = outputQ.pop()
+			n.addChild(lChild)
+			n.addChild(rChild)
+			outputQ.append(n)
+
+
+		for i, t in enumerate(tokens):
+			n = FNode.tokenToNode(t, None if i==0 else tokens[i-1])
+
+			if(n.isUnary()):
+				addToOutput(n)
+			elif(t == '(' or n.isFunction()):
 				opStack.append(n)
 			elif(n.isOperator() or n._type == FNode.Type.NEGATE):
 				while(opStack and opStack[-1]._type != FNode.Type.OPEN_PAREN and opStack[-1].priority() >= n.priority()):
-					outQ.append(opStack.pop())
+					addToOutput(opStack.pop())
 				opStack.append(n)
-			elif(n._type == FNode.Type.CLOSE_PAREN):
+			elif(t == ')'):
 				try:
 					while(True):
 						nOp = opStack.pop()
 						if(nOp._type == FNode.Type.OPEN_PAREN):
 							break
-						outQ.append(nOp)
+						addToOutput(nOp)
 				except Exception as e:
-					print('Mismatched parenthesis in formula!')
+					print('Closing parenthesis does not match any opening parenthesis!')
 					return
 				if(opStack and opStack[-1].isFunction()):
-					outQ.append(opStack.pop())
+					addToOutput(opStack.pop())
 		while(opStack):
-			outQ.append(opStack.pop())
+			addToOutput(opStack.pop())
 
-		def recurse():
-			n = outQ.pop()
-			if(n.isUnary()):
-				return n
-			lChild = recurse()
-			if(n._type == FNode.Type.NEGATE):
-				lChild.negate()
-				return lChild
-			if(n.isFunction()):
-				n.addChild(lChild)
-				return n
-			rChild = recurse()
-			# n.addChild(lChild)
-			# n.addChild(rChild)
-			for child in [lChild, rChild]:
-				if(n.isOperator() and n._type == child._type):
-					n._children = child._children + n._children
-					for c in child._children:
-						c._parent = n
-				else:
-					n.addChild(child)
-			return n
-
-		try:
-			root = recurse()
-		except Exception as e:
-			print('Invalid formula syntax!')
-			return
-		return root
+		return outputQ.pop()
 
 
 	@classmethod
