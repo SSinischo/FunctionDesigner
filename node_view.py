@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import *
 from PyQt6.QtGui import *
 from PyQt6.QtCore import *
-from fnode import FNode
+from fnode import FNode, FNodeType
 
 class NodeView(QTreeWidget):
 	selectedNodeRefresh = pyqtSignal(object)
@@ -15,7 +15,7 @@ class NodeView(QTreeWidget):
 		self.setAcceptDrops(True)
 		self.itemSelectionChanged.connect(lambda *_: self.selectedNodeRefresh.emit(self.selectedNode()))
 
-		self.rootNode = FNode(FNode.Type.ROOT)
+		self.rootNode = FNode(FNodeType.ROOT)
 		self.attachNodeID(self.invisibleRootItem(), self.rootNode)
 		self.lastDragged = None
 		self.lastDraggedOver = None
@@ -43,7 +43,7 @@ class NodeView(QTreeWidget):
 		self.attachNodeID(tItem, n)
 		if(n.name()):
 			tItem.setText(0, n.name())
-		elif(n.type() == FNode.Type.CONSTANT):
+		elif(n.type() == FNodeType.CONSTANT):
 			tItem.setText(0, n.formula())
 			tItem.setFlags(tItem.flags() | Qt.ItemFlag.ItemIsEditable)
 		else:
@@ -55,7 +55,7 @@ class NodeView(QTreeWidget):
 	def createItems(self, rootNode, pItem=None):
 		if(not pItem):
 			pItem = self.invisibleRootItem()
-		if(rootNode._type != FNode.Type.ROOT):
+		if(rootNode._type != FNodeType.ROOT):
 			tItem = self.createItem(rootNode)
 			pItem.addChild(tItem)
 		else:

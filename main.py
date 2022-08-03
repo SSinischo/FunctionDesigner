@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtGui import *
 from PyQt6.QtCore import *
 import numpy as np
-from fnode import FNode
+from fnode import FNode, FNodeType
 from node_view import NodeView
 
 from options import CURVE_FRAMES, CURVE_RESOLUTION
@@ -39,7 +39,7 @@ class NodePalette(NodeView):
 		tItem = super().createItem(n)
 		if(self.isAddingDefaults):
 			tItem.setFlags(tItem.flags() &  ~Qt.ItemFlag.ItemIsDropEnabled)
-			if(n.type() == FNode.Type.SET):
+			if(n.type() == FNodeType.SET):
 				tItem.setFlags(tItem.flags() &  ~Qt.ItemFlag.ItemIsDragEnabled)
 			self.defaultNodeIDs.add(tItem.data(0, Qt.ItemDataRole.UserRole))
 		return tItem
