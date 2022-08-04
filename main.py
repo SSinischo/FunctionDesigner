@@ -50,7 +50,7 @@ class NodePalette(NodeView):
 			prevSelection.setSelected(True)
 
 
-class CompositionView(NodeView):
+class MainExpressionTree(NodeView):
 	def __init__(self):
 		super().__init__()
 		self.setStyleSheet(COMPOSITION_VIEW_STYLE)
@@ -73,7 +73,8 @@ class UserPalette(NodeView):
 		self.rootNode = rootNode
 		self.defaultNodeIDs = set()
 		self.isAddingDefaults = True
-		self.createItems(self.rootNode)
+		if(self.rootNode):
+			self.createItems(self.rootNode)
 
 
 class PreviewPlot(QWidget):
@@ -256,37 +257,12 @@ class PreviewPanel(QFrame):
 		return super().mouseMoveEvent(e)
 
 
-
-class Application(QApplication):
-	def __init__(self, *args, **kwargs):
-		super(Application, self).__init__(*args, **kwargs)
-
-		try:
-			with open('default_palette.json') as f:
-				s = ''.join(f.readlines())
-				f.close()
-			n = FNode.fromString(s)
-			assert n
-			self.nodePalette = NodePalette(n)
-		except Exception as e:
-			print('Failed to open default_palette.json!')
-			exit(1)
-
-		try:
-			with open('user_palette.json') as f:
-				s = ''.join(f.readlines())
-				f.close()
-			n = FNode.fromString(s)
-			assert n
-			self.userPalette = UserPalette(n)
-		except Exception as e:
-			print('Failed to open user_palette.json!')
-			self.userPalette = UserPalette(FNode(FNodeType.ROOT))
-
-		self.previewPanel = PreviewPanel()
-		self.compositionView = CompositionView()
-		self.compositionView.selectedNodeRefresh.connect(self.previewPanel.setActiveNode)
-
+class CompositionPanel(QFrame):
+	def __init__(self, defaultRootNode, userRootNode=None):
+		super().__init__()
+		self.nodePalette = NodePalette(defaultRootNode)
+		self.userPalette = UserPalette(userRootNode)
+		self.expTree = MainExpressionTree()
 
 		self.quickButtons = {}
 		for bLabel, tLabel in [('w', 'w'), ('x', 'x'), ('y', 'y'), ('z', 'z'), ('123', 'constant value'), ('+', 'plus'), ('-', 'minus'), ('*', 'multiply'), ('÷', 'divide'), ('^', 'exponential'), ('sin', 'sin')]:
@@ -296,24 +272,63 @@ class Application(QApplication):
 			b.mousePressEvent = lambda e, b=b, tItem=tItem: self.nodePalette.onQuickButtonPressed(b, tItem, e)
 			self.quickButtons[bLabel] = b
 
+
 		v = QVBoxLayout()
-		v.addWidget(self.previewPanel)
 
 		h = QHBoxLayout()
 		[h.addWidget(b) for b in self.quickButtons.values()]
 		v.addLayout(h)
 
 		h = QHBoxLayout()
-		h.addWidget(self.nodePalette)
-		h.addWidget(self.compositionView, 1)
-
+		tabs = QTabWidget()
+		tabs.addTab(self.nodePalette, 'Base Palette')
+		tabs.addTab(self.userPalette, 'User Palette')
+		h.addWidget(tabs)
+		h.addWidget(self.expTree, 1)
 		v.addLayout(h)
+
+		self.setLayout(v)
+
+
+class Application(QApplication):
+	def __init__(self, *args, **kwargs):
+		super(Application, self).__init__(*args, **kwargs)
+
+		try:
+			with open('default_palette.json') as f:
+				s = ''.join(f.readlines())
+				f.close()
+			defaultRootNode = FNode.fromString(s)
+			assert defaultRootNode
+		except Exception as e:
+			print('Failed to open default_palette.json!')
+			exit(1)
+
+		try:
+			with open('user_palette.json') as f:
+				s = ''.join(f.readlines())
+				f.close()
+			userRootNode = FNode.fromString(s)
+			assert userRootNode
+		except Exception as e:
+			print('Failed to open user_palette.json!')
+			userRootNode = None
+
+		self.previewPanel = PreviewPanel()
+		self.compositionPanel = CompositionPanel(defaultRootNode, userRootNode)
+		self.previewPanel.formulaUpdated.connect(self.compositionPanel.expTree.onFormulaUpdated)
+		self.compositionPanel.expTree.selectedNodeRefresh.connect(self.previewPanel.setActiveNode)
+
+		v = QVBoxLayout()
+		v.addWidget(self.previewPanel)
+		v.addWidget(self.compositionPanel, 1)
 
 		f = QFrame()
 		f.setLayout(v)
 		self.mainWin = QMainWindow()
 		self.mainWin.setCentralWidget(f)
 		self.mainWin.setWindowTitle('Function Designer')
+		self.mainWin.setGeometry(0, 0, 600, 800)
 		self.mainWin.show()
 
 		self.previewPanel.previewFormula.setText('1+2*3*4+5+6')

@@ -134,7 +134,7 @@ class NodeView(QTreeWidget):
 			itemUpdated[0].setText(0, '0')
 	
 
-	def onForumlaUpdated(self, s):
+	def onFormulaUpdated(self, s):
 		try:
 			nNew = FNode.fromString(s)
 			assert nNew
