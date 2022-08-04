@@ -20,10 +20,6 @@ class NodePalette(NodeView):
 
 	def dragEnterEvent(self, e):
 		return e.ignore()
-
-
-	def dragDropEvent(self, e):
-		return False
 	
 
 	def createItem(self, n):
@@ -39,6 +35,19 @@ class NodePalette(NodeView):
 		return False
 
 
+	def onQuickButtonPressed(self, b, tItem, e):
+		prevSelection = self.selectedItem()
+		prevTopItem = self.itemAt(0, 0)
+		self.clearSelection()
+		self.scrollToItem(tItem, QAbstractItemView.ScrollHint.EnsureVisible)
+		p = self.visualItemRect(tItem).topLeft()
+		mpe = QMouseEvent(QEvent.Type.MouseButtonPress, e.position()+QPointF(p), Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier)
+		self.mousePressEvent(mpe)
+		self.startDrag(Qt.DropAction.CopyAction)
+		self.scrollToItem(prevTopItem, QAbstractItemView.ScrollHint.EnsureVisible)
+		self.clearSelection()
+		if(prevSelection):
+			prevSelection.setSelected(True)
 
 
 class CompositionView(NodeView):
@@ -284,7 +293,7 @@ class Application(QApplication):
 			tItem = self.nodePalette.findItems(tLabel, Qt.MatchFlag.MatchExactly | Qt.MatchFlag.MatchRecursive, 0)[0]
 			b = QPushButton(bLabel)
 			b.setStyleSheet(QUICK_BUTTON_STYLE)
-			b.mousePressEvent = lambda e, b=b, tItem=tItem: self.onQuickButtonPressed(b, tItem, e)
+			b.mousePressEvent = lambda e, b=b, tItem=tItem: self.nodePalette.onQuickButtonPressed(b, tItem, e)
 			self.quickButtons[bLabel] = b
 
 		v = QVBoxLayout()
@@ -310,16 +319,6 @@ class Application(QApplication):
 		self.previewPanel.previewFormula.setText('1+2*3*4+5+6')
 
 		self.exec()
-
-
-	def onQuickButtonPressed(self, b, tItem, e):
-		self.nodePalette.clearSelection()
-		self.nodePalette.setFocus()
-		self.nodePalette.scrollToItem(tItem, QAbstractItemView.ScrollHint.EnsureVisible)
-		p = self.nodePalette.visualItemRect(tItem).topLeft()
-		mpe = QMouseEvent(QEvent.Type.MouseButtonPress, e.position()+QPointF(p), Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier)
-		self.nodePalette.mousePressEvent(mpe)
-		self.nodePalette.startDrag(Qt.DropAction.CopyAction)
 
 if __name__ == '__main__':
 	Application(sys.argv)
