@@ -93,7 +93,7 @@ class PreviewPlot(QWidget):
 	
 
 	def setCurve(self, curve):
-		if(not curve):
+		if(curve is None):
 			self.curve = PreviewPlot.DEFAULT_CURVE
 		elif(not np.shape(curve)):
 			self.curve = curve * np.ones((CURVE_FRAMES, CURVE_RESOLUTION))
