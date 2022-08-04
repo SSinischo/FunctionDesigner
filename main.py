@@ -10,49 +10,35 @@ from options import CURVE_FRAMES, CURVE_RESOLUTION
 from stylesheets import *
 
 class NodePalette(NodeView):
-	def __init__(self):
+	def __init__(self, rootNode):
 		super().__init__()
-
-		with open('default_palette.json') as f:
-			s = ''.join(f.readlines())
-			f.close()
-		self.rootNode = FNode.fromString(s)
+		self.rootNode = rootNode
 		self.defaultNodeIDs = set()
-		self.isAddingDefaults = True
 		self.createItems(self.rootNode)
-		self.isAddingDefaults = False
-
-
-	def dragMoveEvent(self, e):
-		if(e.source() == self and self.isDefaultItem(self.selectedItem())):
-			self.invisibleRootItem().setFlags(self.invisibleRootItem().flags() &  ~Qt.ItemFlag.ItemIsDropEnabled)
-		else:
-			self.invisibleRootItem().setFlags(self.invisibleRootItem().flags() | Qt.ItemFlag.ItemIsDropEnabled)
-		return super().dragMoveEvent(e)
+		self.invisibleRootItem().setFlags(self.invisibleRootItem().flags() &  ~Qt.ItemFlag.ItemIsDropEnabled)
 
 
 	def dragEnterEvent(self, e):
-		return super().dragEnterEvent(e)
+		return e.ignore()
+
+
+	def dragDropEvent(self, e):
+		return False
 	
 
 	def createItem(self, n):
 		tItem = super().createItem(n)
-		if(self.isAddingDefaults):
-			tItem.setFlags(tItem.flags() &  ~Qt.ItemFlag.ItemIsDropEnabled)
-			if(n.type() == FNodeType.SET):
-				tItem.setFlags(tItem.flags() &  ~Qt.ItemFlag.ItemIsDragEnabled)
-			self.defaultNodeIDs.add(tItem.data(0, Qt.ItemDataRole.UserRole))
+		tItem.setFlags(tItem.flags() &  ~(Qt.ItemFlag.ItemIsDropEnabled | Qt.ItemFlag.ItemIsEditable))
+		if(n.type() == FNodeType.SET):
+			tItem.setFlags(tItem.flags() &  ~Qt.ItemFlag.ItemIsDragEnabled)
+		self.defaultNodeIDs.add(tItem.data(0, Qt.ItemDataRole.UserRole))
 		return tItem
 
 
 	def deleteSelectedItem(self):
-		if(self.isDefaultItem(self.selectedItem())):
-			return False
-		return super().deleteSelectedItem()
+		return False
 
 
-	def isDefaultItem(self, tItem):
-		return tItem and tItem.data(0, Qt.ItemDataRole.UserRole) in self.defaultNodeIDs
 
 
 class CompositionView(NodeView):
@@ -72,6 +58,15 @@ class CompositionView(NodeView):
 				self.editItem(tItem, 0)
 
 
+class UserPalette(NodeView):
+	def __init__(self, rootNode):
+		super().__init__()
+		self.rootNode = rootNode
+		self.defaultNodeIDs = set()
+		self.isAddingDefaults = True
+		self.createItems(self.rootNode)
+
+
 class PreviewPlot(QWidget):
 	DEFAULT_CURVE = np.zeros((CURVE_FRAMES, CURVE_RESOLUTION))
 
@@ -85,19 +80,19 @@ class PreviewPlot(QWidget):
 		self.frame = 0
 		self.cursorPos = None
 		self.showAltInfo = False
+	
 
-
-	def onSelectedNodeRefresh(self, n):
-		if(not n):
+	def setCurve(self, curve):
+		if(not curve):
 			self.curve = PreviewPlot.DEFAULT_CURVE
-		elif(not np.shape(n.value())):
-			self.curve = n.value() * np.ones((CURVE_FRAMES, CURVE_RESOLUTION))
+		elif(not np.shape(curve)):
+			self.curve = curve * np.ones((CURVE_FRAMES, CURVE_RESOLUTION))
 		else:
-			self.curve = n.value()
+			self.curve = curve
 		self.update()
 
 
-	def onFrameIdxChanged(self, idx):
+	def setFrame(self, idx):
 		self.frame = idx
 		self.update()
 	
@@ -165,71 +160,27 @@ class PreviewPlot(QWidget):
 		p.end()
 
 
-class PreviewFormula(QLineEdit):
-	formulaUpdated = pyqtSignal(str)
-
-	def __init__(self):
-		super().__init__()
-		self.setFont(QFont('Consolas', 12))
-		self.editingFinished.connect(self.onEditingFinished)
-		self.lastFormula = ''
-	
-
-	def onSelectedNodeRefresh(self, n):
-		if(n):
-			self.setText(n.formula())
-			self.lastFormula = self.text()
-		else:
-			self.setText('')
-			self.lastFormula = self.text()
-
-
-	def onEditingFinished(self):
-		s = self.text()
-		if(s == self.lastFormula):
-			return
-		self.lastFormula = s
-		self.formulaUpdated.emit(s)
-
-
 
 class PreviewPanel(QFrame):
+	formulaUpdated = pyqtSignal(str)
+	
 	def __init__(self):
 		super().__init__()
-		self.formula = PreviewFormula()
-		self.plot = PreviewPlot()
-		self.plot.setMinimumWidth(600)
-		self.plot.setMinimumHeight(250)
+		self.activeNode = None
+
+		self.previewFormula = QLineEdit()
+		self.previewFormula.setFont(QFont('Consolas', 12))
+		self.previewFormula.editingFinished.connect(self.onFormulaEdited)
+		self.lastFormula = ''
+
+		self.previewPlot = PreviewPlot()
+		self.previewPlot.setMinimumWidth(600)
+		self.previewPlot.setMinimumHeight(250)
 		self.setMouseTracking(True)
 
-		v = QVBoxLayout()
-		v.addWidget(self.formula)
-		v.addWidget(self.plot, 1)
-		self.setLayout(v)
-
-	
-	def mouseMoveEvent(self, e):
-		if(self.plot.cursorPos):
-			self.plot.cursorPos = None
-			self.plot.update()
-		return super().mouseMoveEvent(e)
-
-
-
-class Application(QApplication):
-	def __init__(self, *args, **kwargs):
-		super(Application, self).__init__(*args, **kwargs)
-
-		self.previewPanel = PreviewPanel()
-		self.nodePalette = NodePalette()
-		self.compositionView = CompositionView()
-		self.compositionView.selectedNodeRefresh.connect(self.previewPanel.formula.onSelectedNodeRefresh)
-		self.compositionView.selectedNodeRefresh.connect(self.previewPanel.plot.onSelectedNodeRefresh)
-		self.previewPanel.formula.formulaUpdated.connect(self.compositionView.onForumlaUpdated)
-
-		self.sliderFrameIdx = QSlider(Qt.Orientation.Horizontal)
-		self.sliderFrameIdx.setMaximum(CURVE_FRAMES-1)
-		self.sliderFrameIdx.valueChanged.connect(self.onFrameIdxChanged)
+		self.frameIdx = QSlider(Qt.Orientation.Horizontal)
+		self.frameIdx.setMaximum(CURVE_FRAMES-1)
+		self.frameIdx.valueChanged.connect(self.onFrameIdxChanged)
 
 		self.labelFrameIdx = QLabel('0', )
 		self.labelFrameIdx.setFont(QFont('Consolas', 12))
@@ -239,16 +190,15 @@ class Application(QApplication):
 		self.labelZValue.setFont(QFont('Consolas', 12))
 		self.labelZValue.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-		sliderContainer = QHBoxLayout()
-
+		h = QHBoxLayout()
 		v = QVBoxLayout()
 		l = QLabel('WT pos')
 		l.setFont(QFont('Consolas', 8))
 		v.addWidget(l)
 		v.addWidget(self.labelFrameIdx)
-		sliderContainer.addLayout(v)
+		h.addLayout(v)
 
-		sliderContainer.addWidget(self.sliderFrameIdx, 1)
+		h.addWidget(self.frameIdx, 1)
 
 		v = QVBoxLayout()
 		self.labelZLabel = QLabel('z')
@@ -256,11 +206,93 @@ class Application(QApplication):
 		self.labelZLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
 		v.addWidget(self.labelZLabel)
 		v.addWidget(self.labelZValue)
-		sliderContainer.addLayout(v)
+		h.addLayout(v)
+
+		v = QVBoxLayout()
+		v.addWidget(self.previewFormula)
+		v.addWidget(self.previewPlot, 1)
+		v.addLayout(h)
+		self.setLayout(v)
+	
+
+	def setActiveNode(self, n):
+		if(not n):
+			self.previewPlot.setCurve(None)
+			s = ''
+		else:
+			self.previewPlot.setCurve(n.value())
+			s = n.formula()
+		self.lastFormula = s
+		self.previewFormula.setText(s)
+	
+
+	def onFrameIdxChanged(self, frameIdx):
+		self.previewPlot.setFrame(self.frameIdx.value())
+		self.labelFrameIdx.setText(str(self.frameIdx.value()))
+		self.labelZValue.setText(f'{self.frameIdx.value()/self.frameIdx.maximum():0.3f}')
+
+
+	def onFormulaEdited(self):
+		s = self.previewFormula.text()
+		if(s == self.lastFormula):
+			return
+		self.lastFormula = s
+		self.formulaUpdated.emit(s)
+
+	
+	def mouseMoveEvent(self, e):
+		if(self.previewPlot.cursorPos):
+			self.previewPlot.cursorPos = None
+			self.previewPlot.update()
+		return super().mouseMoveEvent(e)
+
+
+
+class Application(QApplication):
+	def __init__(self, *args, **kwargs):
+		super(Application, self).__init__(*args, **kwargs)
+
+		try:
+			with open('default_palette.json') as f:
+				s = ''.join(f.readlines())
+				f.close()
+			n = FNode.fromString(s)
+			assert n
+			self.nodePalette = NodePalette(n)
+		except Exception as e:
+			print('Failed to open default_palette.json!')
+			exit(1)
+
+		try:
+			with open('user_palette.json') as f:
+				s = ''.join(f.readlines())
+				f.close()
+			n = FNode.fromString(s)
+			assert n
+			self.userPalette = UserPalette(n)
+		except Exception as e:
+			print('Failed to open user_palette.json!')
+			self.userPalette = UserPalette(FNode(FNodeType.ROOT))
+
+		self.previewPanel = PreviewPanel()
+		self.compositionView = CompositionView()
+		self.compositionView.selectedNodeRefresh.connect(self.previewPanel.setActiveNode)
+
+
+		self.quickButtons = {}
+		for bLabel, tLabel in [('w', 'w'), ('x', 'x'), ('y', 'y'), ('z', 'z'), ('123', 'constant value'), ('+', 'plus'), ('-', 'minus'), ('*', 'multiply'), ('÷', 'divide'), ('^', 'exponential'), ('sin', 'sin')]:
+			tItem = self.nodePalette.findItems(tLabel, Qt.MatchFlag.MatchExactly | Qt.MatchFlag.MatchRecursive, 0)[0]
+			b = QPushButton(bLabel)
+			b.setStyleSheet(QUICK_BUTTON_STYLE)
+			b.mousePressEvent = lambda e, b=b, tItem=tItem: self.onQuickButtonPressed(b, tItem, e)
+			self.quickButtons[bLabel] = b
 
 		v = QVBoxLayout()
 		v.addWidget(self.previewPanel)
-		v.addLayout(sliderContainer)
+
+		h = QHBoxLayout()
+		[h.addWidget(b) for b in self.quickButtons.values()]
+		v.addLayout(h)
 
 		h = QHBoxLayout()
 		h.addWidget(self.nodePalette)
@@ -275,15 +307,19 @@ class Application(QApplication):
 		self.mainWin.setWindowTitle('Function Designer')
 		self.mainWin.show()
 
-		self.previewPanel.formula.setText('1+2*3*4+5+6')
+		self.previewPanel.previewFormula.setText('1+2*3*4+5+6')
 
 		self.exec()
-	
-	def onFrameIdxChanged(self):
-		self.previewPanel.plot.onFrameIdxChanged(self.sliderFrameIdx.value())
-		self.labelFrameIdx.setText(str(self.sliderFrameIdx.value()))
-		self.labelZValue.setText(f'{self.sliderFrameIdx.value()/self.sliderFrameIdx.maximum():0.3f}')
 
+
+	def onQuickButtonPressed(self, b, tItem, e):
+		self.nodePalette.clearSelection()
+		self.nodePalette.setFocus()
+		self.nodePalette.scrollToItem(tItem, QAbstractItemView.ScrollHint.EnsureVisible)
+		p = self.nodePalette.visualItemRect(tItem).topLeft()
+		mpe = QMouseEvent(QEvent.Type.MouseButtonPress, e.position()+QPointF(p), Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier)
+		self.nodePalette.mousePressEvent(mpe)
+		self.nodePalette.startDrag(Qt.DropAction.CopyAction)
 
 if __name__ == '__main__':
 	Application(sys.argv)

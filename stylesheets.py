@@ -10,8 +10,6 @@ COMPOSITION_VIEW_STYLE = '''
     QTreeView::branch:!has-children:!has-siblings:adjoins-item {
         border-image: url(img/branch-end.svg) 0;
     }
-
-
 '''
 
     # QTreeView::branch:has-children:!has-siblings:closed,
@@ -25,3 +23,12 @@ COMPOSITION_VIEW_STYLE = '''
     #         border-image: none;
     #         image: url(img/branch-open.svg);
     # }
+
+QUICK_BUTTON_STYLE = '''
+    QPushButton{
+        padding: 0px;
+        font-family: "Consolas";
+        font-size: 18px;
+        font-weight: 700;
+    }
+'''

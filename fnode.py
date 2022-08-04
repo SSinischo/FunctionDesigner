@@ -260,7 +260,7 @@ class FNode(QObject):
 		FNodeType.SUBTRACT: 'minus',
 		FNodeType.MULTIPLY: 'multiply',
 		FNodeType.DIVIDE: 'divide',
-		FNodeType.EXPONENT: 'exponentiate',
+		FNodeType.EXPONENT: 'exponential',
 		FNodeType.EQUAL: 'equals',
 		FNodeType.NOT_EQUAL: 'not equals',
 		FNodeType.LESS_THAN: 'less than',
