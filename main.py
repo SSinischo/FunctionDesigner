@@ -59,6 +59,19 @@ class CompositionView(NodeView):
 	def __init__(self):
 		super().__init__()
 		self.setStyleSheet(COMPOSITION_VIEW_STYLE)
+	
+	def dropEvent(self, e: QDropEvent):
+		super().dropEvent(e)
+		if(e.source() != self):
+			tItem = e.source().lastDragged
+			n = self.getAttachedNode(tItem)
+			if(n.type() == FNodeType.CONSTANT):
+				self.pauseItemUpdates = True
+				tItem.setText(0, '0')
+				self.pauseItemUpdates = False
+				self.editItem(tItem, 0)
+
+
 
 
 class PreviewPlot(QWidget):
