@@ -72,8 +72,6 @@ class CompositionView(NodeView):
 				self.editItem(tItem, 0)
 
 
-
-
 class PreviewPlot(QWidget):
 	DEFAULT_CURVE = np.zeros((CURVE_FRAMES, CURVE_RESOLUTION))
 

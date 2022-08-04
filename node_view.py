@@ -57,12 +57,14 @@ class NodeView(QTreeWidget):
 		return tItem
 	
 
-	def createItems(self, rootNode, pItem=None):
-		if(not pItem):
+	def createItems(self, rootNode, pItem=None, idx=None):
+		if(pItem == None):
 			pItem = self.invisibleRootItem()
+		if(idx == None):
+			idx = pItem.childCount()
 		if(rootNode._type != FNodeType.ROOT):
 			tItem = self.createItem(rootNode)
-			pItem.addChild(tItem)
+			pItem.insertChild(idx, tItem)
 		else:
 			tItem = pItem
 		for c in rootNode.children():
@@ -142,14 +144,17 @@ class NodeView(QTreeWidget):
 				[self.rootNode.deleteChild(c) for c in self.rootNode.children()]
 				pItem = self.invisibleRootItem()
 				pn = self.rootNode
+				idx = None
 			else:
 				pItem = tItem.parent() or self.invisibleRootItem()
+				idx = pItem.indexOfChild(tItem)
 				pItem.removeChild(tItem)
 				n = self.getAttachedNode(tItem)
 				pn = n.parent()
 				pn.deleteChild(n)
-			pn.addChild(nNew)
-			tItem = self.createItems(nNew, pItem)
+			pn.addChild(nNew, idx)
+			tItem = self.createItems(nNew, pItem, idx)
+			self.clearSelection()
 			tItem.setSelected(True)
 			return True
 		except Exception as e:
