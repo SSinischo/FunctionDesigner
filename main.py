@@ -58,8 +58,8 @@ class MainExpressionTree(NodeView):
 	def dropEvent(self, e: QDropEvent):
 		super().dropEvent(e)
 		if(e.source() != self):
-			tItem = e.source().lastDragged
-			n = self.getAttachedNode(tItem)
+			tItem = e.source().lastDraggedItem
+			n = self.attachedNode(tItem)
 			if(n.type() == FNodeType.CONSTANT):
 				self.pauseItemUpdates = True
 				tItem.setText(0, '0')
@@ -75,6 +75,26 @@ class UserPalette(NodeView):
 		self.isAddingDefaults = True
 		if(self.rootNode):
 			self.createItems(self.rootNode)
+
+	
+	def contextMenuEvent(self, e: QContextMenuEvent) -> None:
+		tItem = self.itemAt(e.pos())
+		m = QMenu()
+		aNewFolder = QAction('New Folder')
+		aRename = QAction('Rename')
+		aDelete = QAction('Delete')
+
+		m.addAction(aNewFolder)
+		if(tItem):
+			m.addAction(aRename)
+			m.addAction(aDelete)
+		a = m.exec(self.mapToGlobal(e.pos()))
+
+		return super().contextMenuEvent(e)
+	
+
+	def mousePressEvent(self, e: QMouseEvent) -> None:
+		return super().mousePressEvent(e)
 
 
 class PreviewPlot(QWidget):
@@ -290,6 +310,11 @@ class CompositionPanel(QFrame):
 		self.setLayout(v)
 
 
+	def keyPressEvent(self, e):
+		if(e.key() == Qt.Key.Key_B and e.modifiers() & Qt.KeyboardModifier.ControlModifier):
+			pass
+
+
 class Application(QApplication):
 	def __init__(self, *args, **kwargs):
 		super(Application, self).__init__(*args, **kwargs)
@@ -317,7 +342,7 @@ class Application(QApplication):
 		self.previewPanel = PreviewPanel()
 		self.compositionPanel = CompositionPanel(defaultRootNode, userRootNode)
 		self.previewPanel.formulaUpdated.connect(self.compositionPanel.expTree.onFormulaUpdated)
-		self.compositionPanel.expTree.selectedNodeRefresh.connect(self.previewPanel.setActiveNode)
+		self.compositionPanel.expTree.itemSelectionChanged.connect(lambda *_: self.previewPanel.setActiveNode(self.compositionPanel.expTree.selectedNode()))
 
 		v = QVBoxLayout()
 		v.addWidget(self.previewPanel)

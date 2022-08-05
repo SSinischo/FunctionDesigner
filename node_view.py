@@ -2,10 +2,13 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtGui import *
 from PyQt6.QtCore import *
 from fnode import FNode, FNodeType
+from stylesheets import *
+
+class ShitItem(QTreeWidgetItem):
+	def __init__(self):
+		super(QTreeWidgetItem, self).__init__()
 
 class NodeView(QTreeWidget):
-	selectedNodeRefresh = pyqtSignal(object)
-
 	def __init__(self):
 		super(QTreeWidget, self).__init__()
 		self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -13,14 +16,11 @@ class NodeView(QTreeWidget):
 		self.setHeaderHidden(True)
 		self.setDragDropMode(self.DragDropMode.DragDrop)
 		self.setAcceptDrops(True)
-		self.itemSelectionChanged.connect(lambda *_: self.selectedNodeRefresh.emit(self.selectedNode()))
-		self.itemChanged.connect(lambda *x: self.onItemUpdated(x))
 
+		self.tItemsByNodeID = {}
 		self.rootNode = FNode(FNodeType.ROOT)
-		self.attachNodeID(self.invisibleRootItem(), self.rootNode)
-		self.lastDragged = None
-		self.lastDraggedOver = None
-		self.pauseItemUpdates = False
+		self.attachNode(self.invisibleRootItem(), self.rootNode)
+		self.lastDraggedItem = None
 
 	
 	def selectedItem(self):
@@ -28,23 +28,28 @@ class NodeView(QTreeWidget):
 		return tItems[0] if tItems else None
 	
 
-	def attachNodeID(self, tItem, n):
+	def attachNode(self, tItem, n):
 		tItem.setData(0, Qt.ItemDataRole.UserRole, n.nodeID())
+		self.tItemsByNodeID[n.nodeID()] = tItem
 	
 
-	def getAttachedNode(self, tItem):
+	def attachedNode(self, tItem):
 		return FNode.getNode(tItem.data(0, Qt.ItemDataRole.UserRole)) if tItem else None
 	
 
 	def selectedNode(self):
-		return self.getAttachedNode(self.selectedItem())
+		return self.attachedNode(self.selectedItem())
 
 
 	def createItem(self, n):
-		tItem = QTreeWidgetItem()
-		self.attachNodeID(tItem, n)
+		tItem = ShitItem()
+		self.attachNode(tItem, n)
 		if(n.name()):
+			defaultFont = tItem.font(0)
 			tItem.setText(0, n.name())
+			tItem.setFont(0, QFont(defaultFont.family(), defaultFont.pointSize(), italic=True))
+			tItem.setCheckState(0, Qt.CheckState.Checked)
+			
 		elif(n.type() == FNodeType.CONSTANT):
 			self.pauseItemUpdates = True
 			tItem.setText(0, n.formula())
@@ -54,6 +59,7 @@ class NodeView(QTreeWidget):
 		if(n.type() == FNodeType.CONSTANT):
 			tItem.setFlags(tItem.flags() | Qt.ItemFlag.ItemIsEditable)
 		#n.nodeUpdated.connect(lambda n: self.selectedNodeRefresh.emit(n) if self.getAttachedNode(self.selectedItem()) == n else None)
+		tItem.setText(1, str(n.nodeID()))
 		return tItem
 	
 
@@ -74,7 +80,7 @@ class NodeView(QTreeWidget):
 	
 
 	def deleteItemAndNodes(self, tItem, warnIfChildren=True):
-		n = self.getAttachedNode(tItem)
+		n = self.attachedNode(tItem)
 		if(warnIfChildren and n.children()):
 			msg = QMessageBox()
 			msg.setText('The selected node is not a leaf.  Are you sure you want to delete the selected node and all of its children?')
@@ -113,7 +119,7 @@ class NodeView(QTreeWidget):
 
 	def pasteFromClipboard(self):
 		pItem = self.selectedItem() or self.invisibleRootItem()
-		pn = self.getAttachedNode(pItem)
+		pn = self.attachedNode(pItem)
 		n = FNode.fromString(QApplication.clipboard().text())
 		if(n):
 			pn.addChild(n)
@@ -125,7 +131,7 @@ class NodeView(QTreeWidget):
 	def onItemUpdated(self, itemUpdated):
 		if(self.pauseItemUpdates):
 			return
-		n = self.getAttachedNode(itemUpdated[0])
+		n = self.attachedNode(itemUpdated[0])
 		if(not n or n.type() != FNodeType.CONSTANT):
 			return
 		try:
@@ -149,7 +155,7 @@ class NodeView(QTreeWidget):
 				pItem = tItem.parent() or self.invisibleRootItem()
 				idx = pItem.indexOfChild(tItem)
 				pItem.removeChild(tItem)
-				n = self.getAttachedNode(tItem)
+				n = self.attachedNode(tItem)
 				pn = n.parent()
 				pn.deleteChild(n)
 			pn.addChild(nNew, idx)
@@ -163,7 +169,7 @@ class NodeView(QTreeWidget):
 
 
 	def startDrag(self, supportedActions):
-		self.lastDragged = self.selectedItem()
+		self.lastDraggedItem = self.selectedItem()
 		return super().startDrag(supportedActions)
 
 
@@ -196,10 +202,10 @@ class NodeView(QTreeWidget):
 
 		if(e.source() != self):
 			e.setDropAction(Qt.DropAction.CopyAction)
-			droppedNode = self.getAttachedNode(sourceItemDragged).copy()
+			droppedNode = self.attachedNode(sourceItemDragged).copy()
 		else:
 			e.setDropAction(Qt.DropAction.MoveAction)
-			droppedNode = self.getAttachedNode(sourceItemDragged)
+			droppedNode = self.attachedNode(sourceItemDragged)
 			if(sourcePItemDragged == pItemDroppedAt):
 				oldIdx = sourcePItemDragged.indexOfChild(sourceItemDragged)
 				if(idxDroppedAt > oldIdx):
@@ -209,7 +215,7 @@ class NodeView(QTreeWidget):
 		super().dropEvent(e)
 
 		tItemDropped = pItemDroppedAt.child(idxDroppedAt)
-		pNodeDroppedAt = self.getAttachedNode(pItemDroppedAt)
+		pNodeDroppedAt = self.attachedNode(pItemDroppedAt)
 
 		pNodeDroppedAt.addChild(droppedNode, idxDroppedAt)
 		if(e.dropAction() == Qt.DropAction.CopyAction):
@@ -220,10 +226,10 @@ class NodeView(QTreeWidget):
 		# else:
 		# 	pNodeDroppedAt.addChild(droppedNode, idxDroppedAt)
 
-		self.attachNodeID(tItemDropped, droppedNode)
+		self.attachNode(tItemDropped, droppedNode)
 		pItemDroppedAt.setExpanded(True)
 		self.pauseItemUpdates = False
-		e.source().lastDragged = tItemDropped
+		e.source().lastDraggedItem = tItemDropped
 
 
 	def dragEnterEvent(self, e):

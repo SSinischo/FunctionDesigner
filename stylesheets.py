@@ -10,6 +10,9 @@ COMPOSITION_VIEW_STYLE = '''
     QTreeView::branch:!has-children:!has-siblings:adjoins-item {
         border-image: url(img/branch-end.svg) 0;
     }
+    QTreeView::item:checked{
+        border: 2px solid #FF0000;
+    }
 '''
 
     # QTreeView::branch:has-children:!has-siblings:closed,
