@@ -441,6 +441,7 @@ class FNode(QObject):
 			for c in child._children:
 				c._parent = self
 			self._children = self._children[:idx] + child._children + self._children[idx:]
+			del child
 		else:
 			child._parent = self
 			self._children.insert(idx, child)
@@ -538,13 +539,13 @@ class FNode(QObject):
 
 			if(n.isUnary()):
 				addToOutput(n)
-			elif(t == '(' or n.isFunction()):
+			elif(n._type == FNodeType.OPEN_PAREN or n.isFunction() or n._type == FNodeType.NEGATE):
 				opStack.append(n)
-			elif(n.isOperator() or n._type == FNodeType.NEGATE):
+			elif(n.isOperator()):
 				while(opStack and opStack[-1]._type != FNodeType.OPEN_PAREN and opStack[-1].priority() >= n.priority()):
 					addToOutput(opStack.pop())
 				opStack.append(n)
-			elif(t == ')'):
+			elif(n._type == FNodeType.CLOSE_PAREN):
 				try:
 					while(True):
 						nOp = opStack.pop()
