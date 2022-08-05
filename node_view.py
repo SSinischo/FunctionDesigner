@@ -48,8 +48,6 @@ class NodeView(QTreeWidget):
 			defaultFont = tItem.font(0)
 			tItem.setText(0, n.name())
 			tItem.setFont(0, QFont(defaultFont.family(), defaultFont.pointSize(), italic=True))
-			tItem.setCheckState(0, Qt.CheckState.Checked)
-			
 		elif(n.type() == FNodeType.CONSTANT):
 			self.pauseItemUpdates = True
 			tItem.setText(0, n.formula())
@@ -58,6 +56,8 @@ class NodeView(QTreeWidget):
 			tItem.setText(0, FNode.TYPE_NAMES[n.type()])
 		if(n.type() == FNodeType.CONSTANT):
 			tItem.setFlags(tItem.flags() | Qt.ItemFlag.ItemIsEditable)
+		elif(n.isNegated()):
+			tItem.setText(0, '-'+tItem.text(0))
 		#n.nodeUpdated.connect(lambda n: self.selectedNodeRefresh.emit(n) if self.getAttachedNode(self.selectedItem()) == n else None)
 		tItem.setText(1, str(n.nodeID()))
 		return tItem
