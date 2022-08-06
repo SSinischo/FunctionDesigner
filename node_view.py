@@ -4,9 +4,6 @@ from PyQt6.QtCore import *
 from fnode import FNode, FNodeType
 from stylesheets import *
 
-class ShitItem(QTreeWidgetItem):
-	def __init__(self):
-		super(QTreeWidgetItem, self).__init__()
 
 class NodeView(QTreeWidget):
 	def __init__(self):
@@ -42,7 +39,7 @@ class NodeView(QTreeWidget):
 
 
 	def createItem(self, n):
-		tItem = ShitItem()
+		tItem = QTreeWidgetItem()
 		self.attachNode(tItem, n)
 		if(n.name()):
 			defaultFont = tItem.font(0)
