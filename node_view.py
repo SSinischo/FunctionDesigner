@@ -6,6 +6,8 @@ from stylesheets import *
 
 
 class NodeView(QTreeWidget):
+	ITALIC_FONT = QFont('Segoe UI', 9, italic=True)
+	
 	def __init__(self):
 		super(QTreeWidget, self).__init__()
 		self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -13,70 +15,84 @@ class NodeView(QTreeWidget):
 		self.setHeaderHidden(True)
 		self.setDragDropMode(self.DragDropMode.DragDrop)
 		self.setAcceptDrops(True)
+		self.setColumnCount(3)
+		self.setColumnWidth(1, 50)
+		self.setColumnWidth(2, 25)
+		self.header().setStretchLastSection(False)
+		self.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
 
 		self.tItemsByNodeID = {}
 		self.rootNode = FNode(FNodeType.ROOT)
 		self.attachNode(self.invisibleRootItem(), self.rootNode)
-		self.lastDraggedItem = None
+
+		self.blockItemUpdates = True
 
 	
-	def selectedItem(self):
+	def selectedItem(self) -> QTreeWidgetItem:
 		tItems = self.selectedItems()
 		return tItems[0] if tItems else None
 	
 
-	def attachNode(self, tItem, n):
+	def attachNode(self, tItem: QTreeWidgetItem, n: FNode):
 		tItem.setData(0, Qt.ItemDataRole.UserRole, n.nodeID())
+		tItem.setText(2, str(n.nodeID()))
 		self.tItemsByNodeID[n.nodeID()] = tItem
 	
 
-	def attachedNode(self, tItem):
+	def attachedNode(self, tItem: QTreeWidgetItem) -> FNode:
 		return FNode.getNode(tItem.data(0, Qt.ItemDataRole.UserRole)) if tItem else None
 	
 
-	def selectedNode(self):
+	def selectedNode(self) -> FNode:
 		return self.attachedNode(self.selectedItem())
 
 
-	def createItem(self, n):
+	# Ensure FNode heirarchy is up to date before calling
+	def createTreeItems(self, n, pItem=None, idx=None):
+		if(n.type() == FNodeType.ROOT):
+			for c in n.children():
+				self.createTreeItems(c, self.invisibleRootItem())
+			return
+		pItem = pItem or self.tItemsByNodeID.get(n.parent())
+		idx = n.parent().children().index(n) if idx is None else idx
 		tItem = QTreeWidgetItem()
 		self.attachNode(tItem, n)
+
 		if(n.name()):
-			defaultFont = tItem.font(0)
 			tItem.setText(0, n.name())
-			tItem.setFont(0, QFont(defaultFont.family(), defaultFont.pointSize(), italic=True))
-		elif(n.type() == FNodeType.CONSTANT):
-			self.pauseItemUpdates = True
-			tItem.setText(0, n.formula())
-			self.pauseItemUpdates = False
+			tItem.setFont(0, NodeView.ITALIC_FONT)
 		else:
 			tItem.setText(0, FNode.TYPE_NAMES[n.type()])
 		if(n.type() == FNodeType.CONSTANT):
+			tItem.setText(0, tItem.text(0) or n.formula())
 			tItem.setFlags(tItem.flags() | Qt.ItemFlag.ItemIsEditable)
+		elif(n.type() == FNodeType.VARIABLE):
+			tItem.setText(1, 'variable')
+			tItem.setFont(1, NodeView.ITALIC_FONT)
+		elif(n.type() == FNodeType.FUNCTION):
+			tItem.setText(1, 'function')
+			tItem.setFont(1, NodeView.ITALIC_FONT)
 		elif(n.isNegated()):
 			tItem.setText(0, '-'+tItem.text(0))
-		#n.nodeUpdated.connect(lambda n: self.selectedNodeRefresh.emit(n) if self.getAttachedNode(self.selectedItem()) == n else None)
-		tItem.setText(1, str(n.nodeID()))
+		
+		pItem.insertChild(idx, tItem)
+		for c in n.children():
+			self.createTreeItems(c, tItem)
+		pItem.setExpanded(True)
 		return tItem
 	
 
-	def createItems(self, rootNode, pItem=None, idx=None):
-		if(pItem == None):
-			pItem = self.invisibleRootItem()
-		if(idx == None):
-			idx = pItem.childCount()
-		if(rootNode._type != FNodeType.ROOT):
-			tItem = self.createItem(rootNode)
-			pItem.insertChild(idx, tItem)
-		else:
-			tItem = pItem
-		for c in rootNode.children():
-			self.createItems(c, tItem)
-		tItem.setExpanded(True)
-		return tItem
+	def deleteItem(self, tItem:QTreeWidgetItem):
+		n = self.attachedNode(tItem)
+		n.delete()
+		pItem = tItem.parent() or self.invisibleRootItem()
+		pItem.removeChild(tItem)
 	
 
-	def deleteItemAndNodes(self, tItem, warnIfChildren=True):
+	def deleteSelectedItem(self, warnIfChildren=True):
+		tItem = self.selectedItem()
+		if(not tItem):
+			return False
 		n = self.attachedNode(tItem)
 		if(warnIfChildren and n.children()):
 			msg = QMessageBox()
@@ -85,18 +101,7 @@ class NodeView(QTreeWidget):
 			r = msg.exec()
 			if(not r):
 				return
-
-		n.parent().deleteChild(n)
-		pItem = tItem.parent() or self.invisibleRootItem()
-		pItem.removeChild(tItem)
-
-	
-	def deleteSelectedItem(self):
-		tItem = self.selectedItem()
-		if(tItem):
-			self.deleteItemAndNodes(tItem)
-			return True
-		return False
+		return self.deleteItem(tItem)
 	
 
 	def copySelectedItem(self):
@@ -120,13 +125,13 @@ class NodeView(QTreeWidget):
 		n = FNode.fromString(QApplication.clipboard().text())
 		if(n):
 			pn.addChild(n)
-			self.createItems(n, pItem)
+			self.createTreeItems(n, pItem)
 			return True
 		return False
 
 
 	def onItemUpdated(self, itemUpdated):
-		if(self.pauseItemUpdates):
+		if(self.blockItemUpdates):
 			return
 		n = self.attachedNode(itemUpdated[0])
 		if(not n or n.type() != FNodeType.CONSTANT):
@@ -137,32 +142,22 @@ class NodeView(QTreeWidget):
 			itemUpdated[0].setText(0, '0')
 	
 
-	def onFormulaUpdated(self, s):
-		try:
-			nNew = FNode.fromString(s)
-			assert nNew
-			tItem = self.selectedItem()
-			if(not tItem):
-				self.invisibleRootItem().takeChildren()
-				[self.rootNode.deleteChild(c) for c in self.rootNode.children()]
-				pItem = self.invisibleRootItem()
-				pn = self.rootNode
-				idx = None
-			else:
-				pItem = tItem.parent() or self.invisibleRootItem()
-				idx = pItem.indexOfChild(tItem)
-				pItem.removeChild(tItem)
-				n = self.attachedNode(tItem)
-				pn = n.parent()
-				pn.deleteChild(n)
-			pn.addChild(nNew, idx)
-			tItem = self.createItems(nNew, pItem, idx)
-			self.clearSelection()
-			tItem.setSelected(True)
-			return True
-		except Exception as e:
-			#self.selectedNodeRefresh.emit(self.getAttachedNode(self.selectedItem()))
-			return False
+	def replaceSelectedNode(self, n):
+		tItem = self.selectedItem()
+		if(not tItem):
+			self.invisibleRootItem().takeChildren()
+			[c.delete() for c in self.rootNode.children()]
+			pItem = self.invisibleRootItem()
+			idx = None
+		else:
+			pItem = tItem.parent() or self.invisibleRootItem()
+			idx = pItem.indexOfChild(tItem)
+			self.deleteItem(tItem)
+			pItem.removeChild(tItem)
+		self.attachedNode(pItem).addChild(n, idx)
+		tItem = self.createTreeItems(n, pItem, idx)
+		self.clearSelection()
+		tItem.setSelected(True)
 
 
 	def startDrag(self, supportedActions):
@@ -175,58 +170,46 @@ class NodeView(QTreeWidget):
 			e.ignore()
 			return
 	
+		#itemFromIndex
+		#itemAbove
+		#itemBelow
 		sourceItemDragged = e.source().selectedItem()
 		sourcePItemDragged = sourceItemDragged.parent() or self.invisibleRootItem()
 		ePos = e.position().toPoint()
 		tItemDroppedAt = self.itemAt(ePos)
-		qmidxDroppedAt = self.indexAt(ePos)
 
 		match(self.dropIndicatorPosition()):
 			case self.DropIndicatorPosition.AboveItem:
-				pItemDroppedAt = tItemDroppedAt.parent() or self.invisibleRootItem()
-				idxDroppedAt = qmidxDroppedAt.row()
+				newPItem = tItemDroppedAt.parent() or self.invisibleRootItem()
+				newIdx = self.indexAt(ePos).row()
 			case self.DropIndicatorPosition.BelowItem:
-				pItemDroppedAt = tItemDroppedAt.parent() or self.invisibleRootItem()
-				idxDroppedAt = qmidxDroppedAt.row() + 1
+				newPItem = tItemDroppedAt.parent() or self.invisibleRootItem()
+				newIdx = self.indexAt(ePos).row() + 1
 			case self.DropIndicatorPosition.OnItem:
 				if(sourceItemDragged == tItemDroppedAt):
 					return
-				pItemDroppedAt = tItemDroppedAt
-				idxDroppedAt = tItemDroppedAt.childCount()
+				newPItem = tItemDroppedAt
+				newIdx = tItemDroppedAt.childCount()
 			case self.DropIndicatorPosition.OnViewport:
-				pItemDroppedAt = self.invisibleRootItem()
-				idxDroppedAt = self.invisibleRootItem().childCount()
+				newPItem = self.invisibleRootItem()
+				newIdx = self.invisibleRootItem().childCount()
+
+		newParent = self.attachedNode(newPItem)
 
 		if(e.source() != self):
 			e.setDropAction(Qt.DropAction.CopyAction)
 			droppedNode = self.attachedNode(sourceItemDragged).copy()
+			newParent.addChild(droppedNode, newIdx)
+			self.createTreeItems(droppedNode, newPItem, newIdx)
 		else:
 			e.setDropAction(Qt.DropAction.MoveAction)
 			droppedNode = self.attachedNode(sourceItemDragged)
-			if(sourcePItemDragged == pItemDroppedAt):
+			if(sourcePItemDragged == newPItem):
 				oldIdx = sourcePItemDragged.indexOfChild(sourceItemDragged)
-				if(idxDroppedAt > oldIdx):
-					idxDroppedAt -= 1
-
-		self.pauseItemUpdates = True
-		super().dropEvent(e)
-
-		tItemDropped = pItemDroppedAt.child(idxDroppedAt)
-		pNodeDroppedAt = self.attachedNode(pItemDroppedAt)
-
-		pNodeDroppedAt.addChild(droppedNode, idxDroppedAt)
-		if(e.dropAction() == Qt.DropAction.CopyAction):
-			if(droppedNode.type() == FNodeType.CONSTANT):
-				tItemDropped.setFlags(tItemDropped.flags() | Qt.ItemFlag.ItemIsEditable)
-			if(droppedNode.children()):
-				[self.createItems(c, tItemDropped) for c in droppedNode.children()]
-		# else:
-		# 	pNodeDroppedAt.addChild(droppedNode, idxDroppedAt)
-
-		self.attachNode(tItemDropped, droppedNode)
-		pItemDroppedAt.setExpanded(True)
-		self.pauseItemUpdates = False
-		e.source().lastDraggedItem = tItemDropped
+				if(newIdx > oldIdx):
+					newIdx -= 1
+			newParent.addChild(droppedNode, newIdx)
+			super().dropEvent(e)
 
 
 	def dragEnterEvent(self, e):

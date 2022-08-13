@@ -280,7 +280,7 @@ class FNode(QObject):
 	ACTIVE_NODES = {}
 	PAUSE_CALCULATIONS = False
 
-	nodeUpdated = pyqtSignal(object)
+	nodeStateChanged = pyqtSignal(object, int)
 
 	def __init__(self, type:int):
 		super().__init__()
@@ -294,7 +294,7 @@ class FNode(QObject):
 		self._name = None
 		self._value = 0
 		self._formula = ''
-		self.state = FNode.UNCALCULATED
+		self._state = FNode.UNCALCULATED
 		
 		print(f'{self} - created')
 
@@ -306,6 +306,13 @@ class FNode(QObject):
 	def __str__(self):
 		return f'{self._name+" " if self._name else (str(self._value)+" " if self._type == FNodeType.CONSTANT else "")}{self._type.name} #{self._nodeID} ({len(self._children)})'
 
+
+	def state(self):
+		return self._state
+
+	def _setState(self, state):
+		self._state = state
+		self.nodeStateChanged.emit(self, state)
 
 	def nodeID(self):
 		return self._nodeID
@@ -376,7 +383,7 @@ class FNode(QObject):
 	
 
 	def invalidate(self, invalidateParent=True):
-		self.state = FNode.INVALID_CHILDREN
+		self._setState(FNode.INVALID_CHILDREN)
 		if(invalidateParent and self._parent):
 			self._parent.invalidate()
 
@@ -388,10 +395,10 @@ class FNode(QObject):
 		print(f'{self} - calculating')
 
 		for c in self._children:
-			if(c.state == FNode.UNCALCULATED):
+			if(c._state == FNode.UNCALCULATED):
 				print(f'{self} - uncalculated children!')
 				c.calculate(False)
-			if(c.state == FNode.INVALID_CHILDREN):
+			if(c._state == FNode.INVALID_CHILDREN):
 				return self.invalidate(calcParent)
 		
 		if(self._type == FNodeType.ROOT or self._type == FNodeType.SET):
@@ -425,19 +432,18 @@ class FNode(QObject):
 			else:
 				self._formula = f'-{self._formula}'
 
-		self.state = FNode.CALCULATED
-		self.nodeUpdated.emit(self)
+		self._setState(FNode.CALCULATED)
 		if(calcParent and self._parent):
 			self._parent.calculate()
 
 
-	def addChild(self, child, idx=None):
+	def addChild(self, child, idx=None, collapse=False):
 		print(f'{self} - adding {child}')
 		if(idx == None):
 			idx = len(self._children)
 		if(child._parent):
 			child._parent.removeChild(child)
-		if(child._type == self._type):
+		if(collapse and child._type == self._type):
 			for c in child._children:
 				c._parent = self
 			self._children = self._children[:idx] + child._children + self._children[idx:]
@@ -453,44 +459,39 @@ class FNode(QObject):
 		child._parent = None
 		self._children.remove(child)
 		self.calculate()
-	
-
-	def deleteChild(self, child):
-		print(f'{self} - deleting {child}')
-		def recurse(n):
-			FNode.ACTIVE_NODES.pop(n._nodeID)
-			[recurse(c) for c in n._children]
-			try:
-				n.nodeUpdated.disconnect()
-			except:
-				pass
-			del n
-		self.removeChild(child)
-		recurse(child)
-		gc.collect()
 
 
-	def asJSON(self):
+	def asJSON(self, stringify=True):
 		j = {'type': int(self._type)}
 		if(self._name):
 			j['name'] = self._name
 		if(self._type == FNodeType.CONSTANT):
 			j['value'] = int(self._value) if not self._value % 1 else self._value
 		if(self._children):
-			j['children'] = [c.asJSON() for c in self._children]
-		return j
-
-
-	def asString(self):
-		# if(self.state == FNode.CALCULATED):
-		# 	return self._formula
-		# else:
-			return json.dumps(self.asJSON())
+			j['children'] = [c.asJSON(stringify) for c in self._children]
+		return json.dumps(j) if stringify else j
 	
 
 	def copy(self):
-		n = FNode.fromJSON(self.asJSON())
+		n = FNode.fromJSON(self.asJSON(False))
 		return n
+	
+	
+	def delete(self):
+		print(f'{self} - deleting')
+		def recurse(n):
+			FNode.ACTIVE_NODES.pop(n._nodeID)
+			[recurse(c) for c in n._children]
+			try:
+				n.nodeStateChanged.disconnect()
+			except:
+				pass
+			del n
+		p = self.parent
+		if(p):
+			p.removeChild(self)
+		recurse(self)
+		gc.collect()
 	
 
 	@classmethod
@@ -512,6 +513,31 @@ class FNode(QObject):
 
 
 	@classmethod
+	def fromJSON(_, j):
+		n = FNode(FNodeType(j['type']))
+		n._name = j.get('name')
+		if(n._type == FNodeType.CONSTANT):
+			n.setConstantValue(j.get('value') or 0)
+		for c in j.get('children') or []:
+			n.addChild(FNode.fromJSON(c))
+		return n
+
+
+	@classmethod
+	def fromString(_, s):
+		FNode.PAUSE_CALCULATIONS = True
+		try:
+			j = json.loads(s)
+			n = FNode.fromJSON(j)
+		except Exception as e:
+			n = FNode.fromFormula(s)
+		FNode.PAUSE_CALCULATIONS = False
+		if(n):
+			n.calculate()
+		return n
+
+
+	@classmethod
 	def fromFormula(_, infixStr:str) -> "FNode":
 		rexp = r'([a-z]+|[0-9.]+|==|>=|<=|&&|!=|\|\||[\(\)\^\/*\-+])'
 		tokens = re.findall(rexp, infixStr.lower())
@@ -523,14 +549,14 @@ class FNode(QObject):
 				return outputQ.append(n)
 			rChild = outputQ.pop()
 			if(n.isFunction()):
-				n.addChild(rChild)
+				n.addChild(rChild, collapse=True)
 				return outputQ.append(n)
 			if(n._type == FNodeType.NEGATE):
 				rChild.negate()
 				return outputQ.append(rChild)
 			lChild = outputQ.pop()
-			n.addChild(lChild)
-			n.addChild(rChild)
+			n.addChild(lChild, collapse=True)
+			n.addChild(rChild, collapse=True)
 			outputQ.append(n)
 
 
@@ -562,30 +588,6 @@ class FNode(QObject):
 
 		return outputQ.pop()
 
-
-	@classmethod
-	def fromJSON(_, j):
-		n = FNode(FNodeType(j['type']))
-		n._name = j.get('name')
-		if(n._type == FNodeType.CONSTANT):
-			n.setConstantValue(j.get('value') or 0)
-		for c in j.get('children') or []:
-			n.addChild(FNode.fromJSON(c))
-		return n
-
-
-	@classmethod
-	def fromString(_, s):
-		FNode.PAUSE_CALCULATIONS = True
-		try:
-			j = json.loads(s)
-			n = FNode.fromJSON(j)
-		except Exception as e:
-			n = FNode.fromFormula(s)
-		FNode.PAUSE_CALCULATIONS = False
-		if(n):
-			n.calculate()
-		return n
 
 	@classmethod
 	def accumulate(_, fn, params):

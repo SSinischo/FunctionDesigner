@@ -6,6 +6,10 @@
             "name": "constant value"
         },
         {
+            "type": 600,
+            "name": "function variable"
+        },
+        {
             "type": 10
         },
         {
