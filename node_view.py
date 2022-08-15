@@ -63,10 +63,11 @@ class NodeView(QTreeWidget):
 			tItem.setFont(0, NodeView.ITALIC_FONT)
 		else:
 			tItem.setText(0, FNode.TYPE_NAMES[n.type()])
+
 		if(n.type() == FNodeType.CONSTANT):
-			tItem.setText(0, tItem.text(0) or n.formula())
+			tItem.setText(0, n.formula())
 			tItem.setFlags(tItem.flags() | Qt.ItemFlag.ItemIsEditable)
-		elif(n.type() == FNodeType.VARIABLE):
+		elif(n.type() == FNodeType.FN_PARAMETER):
 			tItem.setText(1, 'variable')
 			tItem.setFont(1, NodeView.ITALIC_FONT)
 		elif(n.type() == FNodeType.FUNCTION):
@@ -76,8 +77,8 @@ class NodeView(QTreeWidget):
 			tItem.setText(0, '-'+tItem.text(0))
 		
 		pItem.insertChild(idx, tItem)
-		for c in n.children():
-			self.createTreeItems(c, tItem)
+		if(n.type() != FNodeType.FUNCTION):
+			[self.createTreeItems(c, tItem) for c in n.children()]
 		pItem.setExpanded(True)
 		return tItem
 	

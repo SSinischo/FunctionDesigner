@@ -75,22 +75,56 @@ class UserPalette(NodeView):
 		self.rootNode = rootNode
 		self.defaultNodeIDs = set()
 		self.isAddingDefaults = True
+		self.initDefineFunctionWindow()
 		if(self.rootNode):
 			self.createTreeItems(self.rootNode)
+	
+
+	def initDefineFunctionWindow(self):
+		self.defineFnName = QLineEdit()
+		self.defineFnOk = QPushButton('OK')
+		self.defineFnCancel = QPushButton('Cancel')
+
+		v = QVBoxLayout()
+		h = QHBoxLayout()
+		h.addWidget(QLabel("function name"))
+		h.addWidget(self.defineFnName)
+		v.addLayout(h)
+		h = QHBoxLayout()
+		h.addWidget(self.defineFnOk)
+		h.addWidget(self.defineFnCancel)
+		v.addLayout(h)
+		self.defineFnWindow = QFrame()
+		self.defineFnWindow.setLayout(v)
+		self.defineFnCancel.clicked.connect(lambda *_: self.defineFnWindow.hide())
+	
+
+	def defineAsFunction(self, tItem: QTreeWidgetItem):
+		n = self.attachedNode(tItem)
+		fn = n.functionize()
+		tItem.
 
 	
 	def contextMenuEvent(self, e: QContextMenuEvent) -> None:
 		tItem = self.itemAt(e.pos())
 		m = QMenu()
 		aNewFolder = QAction('New Folder')
+		aNewFn = QAction('Define as function...')
 		aRename = QAction('Rename')
 		aDelete = QAction('Delete')
 
 		m.addAction(aNewFolder)
 		if(tItem):
-			m.addAction(aRename)
+			n = self.attachedNode(tItem)
+			if(n.type() == FNodeType.FUNCTION):
+				m.addAction(aRename)
+			else:
+				m.addAction(aNewFn)
 			m.addAction(aDelete)
 		a = m.exec(self.mapToGlobal(e.pos()))
+		if(a == aNewFn):
+			self.defineFnOk.clicked.connect(lambda *_: self.defineAsFunction(tItem))
+			self.defineFnWindow.show()
 
 		return super().contextMenuEvent(e)
 	
@@ -108,7 +142,7 @@ class CompositionPanel(QFrame):
 		self.expTree = MainExpressionTree()
 
 		self.quickButtons = {}
-		for bLabel, tLabel in [('w', 'w'), ('x', 'x'), ('y', 'y'), ('z', 'z'), ('123', 'constant value'), ('+', 'plus'), ('-', 'minus'), ('*', 'multiply'), ('÷', 'divide'), ('^', 'exponential'), ('sin', 'sin')]:
+		for bLabel, tLabel in [('w', 'w'), ('x', 'x'), ('y', 'y'), ('z', 'z'), ('123', 'constant value'), ('var', 'function variable'), ('+', 'plus'), ('-', 'minus'), ('*', 'multiply'), ('÷', 'divide'), ('^', 'exponential')]:
 			tItem = self.nodePalette.findItems(tLabel, Qt.MatchFlag.MatchExactly | Qt.MatchFlag.MatchRecursive, 0)[0]
 			b = QPushButton(bLabel)
 			b.setStyleSheet(QUICK_BUTTON_STYLE)
