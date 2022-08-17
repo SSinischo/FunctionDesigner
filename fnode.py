@@ -1,19 +1,19 @@
+from ast import Constant
 from enum import IntEnum
+from fnmatch import fnmatch
+from unittest.loader import VALID_MODULE_NAME
 import numpy as np
 from PyQt6.QtCore import QObject, pyqtSignal
 import json
 import re
 import gc
+import logging as log
 
+from fnode_util import CALC_FUNCTIONS, FORMULA_FUNCTIONS, FORMULA_TOKENS, DISPLAY_NAMES
 from options import CURVE_FRAMES, CURVE_RESOLUTION
 
 
 class FNode(QObject):
-	ID_COUNTER = 0
-	ACTIVE_NODES = {}
-	PAUSE_CALCULATIONS = False
-
-	nodeStateChanged = pyqtSignal(object, int)
 
 	class Type(IntEnum):
 		NULL = 0
@@ -60,23 +60,29 @@ class FNode(QObject):
 		MAX = 291
 		SUM = 292
 		AVG = 293
-		NEGATE = 300
-		OPEN_PAREN = 350
-		CLOSE_PAREN = 351
+		OPEN_PAREN = 300
+		CLOSE_PAREN = 301
 		VARIABLE = 400
 		FN_PARAMETER = 500
 		SET = 600
 		FUNCTION = 700
 		ROOT = 999
-	
+		NEGATE = 1000
+
 
 	class State(IntEnum):
-		INVALID = 0
 		VALID = 1
 		CALCULATED = 2
-		N_CHILDREN_OVER = 2
-		N_CHILDREN_UNDER = 3
-		INVALID_DESCENDANT = 4
+		INVALID = 10
+		N_CHILDREN_OVER = 11
+		N_CHILDREN_UNDER = 11
+		INVALID_DESCENDANT = 12
+
+
+	ID_COUNTER = 0
+	ACTIVE_NODES = {}
+
+	nodeStateChanged = pyqtSignal(object, int)
 
 
 	def __init__(self, type:'FNode.Type'):
@@ -87,57 +93,87 @@ class FNode(QObject):
 		self._type = type
 		self._parent = None
 		self._children = []
-		self._fnVariables = []
-		self._negated = False
-		self._name = None
-		self._value = 0
+		self._value = np.pi if self._type == FNode.Type.PI else np.e if self._type == FNode.Type.E else 0
 		self._formula = ''
-		self._state = FNode.UNCALCULATED
+		self._negated = False
+		self._state = FNode.State.INVALID
+		self._name = ''
+		self._parameters = {}
+		log.debug(f'{self} - created')
 
 
+	def __repr__(self) -> str:
+		s = f'#{self._nodeID}'
+		s2 = self._value if self._type == FNode.Type.CONSTANT else self._name
+		return f'{s} {self._type.name} [{s2}]'
 
-	def _calcFn(self):
-		match self.
-		FNodeType.PI: lambda *_: np.pi,
-		FNodeType.E: lambda *_: np.e,
-		FNodeType.W: lambda *_: np.tile(np.linspace(0, 1, CURVE_RESOLUTION), (CURVE_FRAMES, 1)),
-		FNodeType.X: lambda *_: np.tile(np.linspace(-1, 1, CURVE_RESOLUTION), (CURVE_FRAMES, 1)),
-		FNodeType.Y: lambda *_: np.repeat(np.linspace(-1, 1, CURVE_FRAMES), CURVE_RESOLUTION).reshape(CURVE_FRAMES, CURVE_RESOLUTION),
-		FNodeType.Z: lambda *_: np.repeat(np.linspace(0, 1, CURVE_FRAMES), CURVE_RESOLUTION).reshape(CURVE_FRAMES, CURVE_RESOLUTION),
-		FNodeType.SIN: np.sin,
-		FNodeType.COS: np.cos,
-		FNodeType.TAN: np.tan,
-		FNodeType.ASIN: np.arcsin,
-		FNodeType.ACOS: np.arccos,
-		FNodeType.ATAN: np.arctan,
-		FNodeType.SINH: np.sinh,
-		FNodeType.COSH: np.cosh,
-		FNodeType.TANH: np.tanh,
-		FNodeType.ASINH: np.arcsinh,
-		FNodeType.ACOSH: np.arccosh,
-		FNodeType.ATANH: np.arctanh,
-		FNodeType.LOG2: np.log2,
-		FNodeType.LOG10: np.log10,
-		FNodeType.LN: np.log,
-		FNodeType.SQRT: np.sqrt,
-		FNodeType.SIGN: np.sign,
-		FNodeType.RINT: np.rint,
-		FNodeType.ABS: np.abs,
-		FNodeType.NEGATE: np.negative,
-		FNodeType.ADD: lambda *c: FNode.accumulate(np.add, c),
-		FNodeType.SUBTRACT: lambda *c: FNode.accumulate(np.subtract, c),
-		FNodeType.MULTIPLY: lambda *c: FNode.accumulate(np.multiply, c),
-		FNodeType.DIVIDE: lambda *c: FNode.accumulate(np.divide, c),
-		FNodeType.EXPONENT: lambda *c: FNode.accumulate(np.power, c),
-		FNodeType.EQUAL: lambda *c: FNode.accumulate(lambda x, y: np.equal(x, y).astype(int), c),
-		FNodeType.NOT_EQUAL: lambda *c: 106,
-		FNodeType.LESS_THAN: lambda *c: 107,
-		FNodeType.LESS_EQ: lambda *c: 108,
-		FNodeType.GREATER_THAN: lambda *c: 109,
-		FNodeType.GREATER_EQ: lambda *c: 110,
-		FNodeType.OR: lambda *c: 111,
-		FNodeType.AND: lambda *c: 112,
-		FNodeType.MIN: lambda *c: 113,
-		FNodeType.MAX: lambda *c: 114,
-		FNodeType.SUM: lambda *c: 115,
-		FNodeType.AVG: lambda *c: 116
+
+	def __str__(self):
+		s = f'#{self._nodeID}'
+		s2 = self._value if self._type == FNode.Type.CONSTANT else self._name
+		return f'{s} {self._type.name} [{s2}] [c{len(self._children)}]'
+	
+
+	def expectedChildCount(self):
+		if(self._type < 100 or self._type == FNode.Type.VARIABLE):
+			return 0
+		elif(self._type < 200 or 290 <= self._type < 300 or self._type == FNode.Type.SET):
+			return -1
+		return 1
+	
+
+	def validate(self, childState=None):
+		if(self._type == FNode.Type.FUNCTION):
+			for k, v in self._parameters.items():
+				if(c._state >= FNode.State.INVALID):
+					s = FNode.State.INVALID
+					break
+			s = FNode.State.VALID
+		else:
+			expChildren = self.expectedChildCount()
+			s = FNode.State.CALCULATED if expChildren == 0 else FNode.State.VALID
+			if(not childState):
+				for c in self._children:
+					if(c._state >= FNode.State.INVALID):
+						s = FNode.State.INVALID_DESCENDANT
+						break
+			elif(childState >= FNode.State.INVALID and self._state < FNode.State.INVALID):
+				s = FNode.State.INVALID_DESCENDANT
+			elif(s != FNode.State.INVALID_DESCENDANT):
+				if(expChildren == -1 and not self._children):
+					s = FNode.State.N_CHILDREN_UNDER
+				elif(len(self._children) > expChildren):
+					s = FNode.State.N_CHILDREN_OVER
+				elif(len(self._children) < expChildren):
+					s = FNode.State.N_CHILDREN_UNDER
+		if(self._state != s):
+			self._state = s
+			self.nodeStateChanged.emit(self)
+		if(self._parent):
+			self._parent.validate(s)
+
+	
+
+	def value(self):
+		if(self._type >= FNode.Type.SET):
+			return None
+		if(self._state == FNode.State.VALID):
+			self.calculate()
+		if(self._state == FNode.State.CALCULATED):
+			if(isinstance(self._value, np.ndarray)):
+				v = self._value
+			elif(self._type < 10):
+				v = self._value * np.ones((CURVE_FRAMES, CURVE_RESOLUTION))
+			else:
+				v = CALC_FUNCTIONS[self._type]
+			return -v if self._negate else v
+		return None
+	
+
+	def calculate(self):
+		if(self._type >= FNode.Type.SET):
+			return
+		log.debug(f'{self} - calculating')
+		
+		calcFn = CALC_FUNCTIONS[self._type]
+

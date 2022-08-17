@@ -70,12 +70,12 @@ class FNode(QObject):
 	INVALID_CHILDREN = 2
 
 	CALC_FUNCTIONS = {
-		FNodeType.PI: lambda *_: np.pi,
-		FNodeType.E: lambda *_: np.e,
-		FNodeType.W: lambda *_: np.tile(np.linspace(0, 1, CURVE_RESOLUTION), (CURVE_FRAMES, 1)),
-		FNodeType.X: lambda *_: np.tile(np.linspace(-1, 1, CURVE_RESOLUTION), (CURVE_FRAMES, 1)),
-		FNodeType.Y: lambda *_: np.repeat(np.linspace(-1, 1, CURVE_FRAMES), CURVE_RESOLUTION).reshape(CURVE_FRAMES, CURVE_RESOLUTION),
-		FNodeType.Z: lambda *_: np.repeat(np.linspace(0, 1, CURVE_FRAMES), CURVE_RESOLUTION).reshape(CURVE_FRAMES, CURVE_RESOLUTION),
+		FNodeType.PI: np.pi,
+		FNodeType.E: np.e,
+		FNodeType.W: np.tile(np.linspace(0, 1, CURVE_RESOLUTION), (CURVE_FRAMES, 1)),
+		FNodeType.X: np.tile(np.linspace(-1, 1, CURVE_RESOLUTION), (CURVE_FRAMES, 1)),
+		FNodeType.Y: np.repeat(np.linspace(-1, 1, CURVE_FRAMES), CURVE_RESOLUTION).reshape(CURVE_FRAMES, CURVE_RESOLUTION),
+		FNodeType.Z: np.repeat(np.linspace(0, 1, CURVE_FRAMES), CURVE_RESOLUTION).reshape(CURVE_FRAMES, CURVE_RESOLUTION),
 		FNodeType.SIN: np.sin,
 		FNodeType.COS: np.cos,
 		FNodeType.TAN: np.tan,
